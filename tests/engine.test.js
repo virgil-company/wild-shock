@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { nodes, nodeMap, schools, paths, spellInfo } from '../src/catalog.js';
-import { createGame, generateRealm, move, cast, wait, drink, learn, restore, serialize, availableSpells, maxHealth, SIZE, hasSight } from '../src/engine.js';
+import { createGame, generateRealm, move, cast, wait, drink, learningPlan, learn, restore, serialize, availableSpells, maxHealth, SIZE, hasSight } from '../src/engine.js';
 function arena() {
   const game = createGame(42);
   game.tiles = Array.from({ length: SIZE }, (_, y) => Array.from({ length: SIZE }, (_, x) => !x || !y || x === SIZE - 1 || y === SIZE - 1 ? 1 : 0));
@@ -38,8 +38,8 @@ test('invalid actions do not consume turns or resources', () => {
   assert.equal(game.turn, 0); assert.equal(game.charges['0-0'], 7);
 });
 test('skills enforce prerequisites, costs and uniqueness without consuming a turn', () => {
-  const game = arena(); assert.equal(learn(game, '0-0-3'), false); assert.ok(learn(game, '0-0-2')); assert.equal(learn(game, '0-0-2'), false);
-  assert.equal(game.points, 11); game.points = 0; assert.equal(learn(game, '0-0-3'), false); assert.equal(game.turn, 0);
+  const game = arena(); assert.ok(learn(game, '0-0-3')); assert.ok(game.learned.includes('0-0-2')); assert.equal(learn(game, '0-0-2'), false);
+  assert.equal(game.points, 10); game.points = 0; assert.equal(learn(game, '0-0-3'), false); assert.equal(game.turn, 0);
 });
 test('line of sight blocks casting through walls', () => {
   const game = arena(); game.tiles[11][5] = 1; assert.equal(hasSight(game, game.player, { x: 7, y: 11 }), false); assert.equal(cast(game, '0-0', { x: 7, y: 11 }), false);
@@ -77,4 +77,42 @@ test('lances only hit along the aimed forward ray, including safe self-targeting
   cast(game, '2-2', { x: 7, y: 11 });
   assert.equal(game.enemies[0].hp, 19); assert.equal(game.enemies[1].hp, 30); assert.equal(game.enemies[2].hp, 30);
   const second = arena(); second.enemies = [enemy(6, 11), enemy(3, 14, { id: 2 })]; cast(second, '2-2', { x: 3, y: 11 }); assert.ok(second.enemies.every(e => e.hp === 30));
+});
+
+test('buying a later rank charges only missing prerequisites at their individual costs', () => {
+  const game = arena(); game.points = 6;
+  const plan = learningPlan(game, '0-0-6');
+  assert.deepEqual(plan.nodes.map(node => node.rank), [2, 3, 4, 5, 6]);
+  assert.equal(plan.cost, 7);
+  const before = serialize(game);
+  assert.equal(learn(game, '0-0-6'), false);
+  assert.equal(serialize(game), before);
+  game.points = 7;
+  assert.ok(learn(game, '0-0-6'));
+  assert.equal(game.points, 0); assert.equal(game.progress.pointsSpent, 7);
+  assert.equal(game.learned.filter(id => id.startsWith('0-0-')).length, 6);
+  assert.equal(game.turn, 0);
+  assert.deepEqual(restore(serialize(game)), game);
+});
+test('bulk learning unlocks roots and applies all bonuses just like sequential learning', () => {
+  for (const path of paths) {
+    const bulk = arena(), sequential = arena();
+    bulk.points = sequential.points = 100;
+    assert.ok(learn(bulk, `3-${path.id}-6`));
+    for (let rank = 1; rank <= 6; rank++) assert.ok(learn(sequential, `3-${path.id}-${rank}`));
+    assert.deepEqual(bulk.learned, sequential.learned);
+    assert.equal(bulk.player.hp, sequential.player.hp);
+    assert.equal(bulk.points, sequential.points);
+    const spell = availableSpells(bulk).find(spell => spell.id === `3-${path.id}`);
+    assert.ok(spell); assert.equal(bulk.charges[spell.id], spell.maxCharges);
+  }
+});
+test('invalid, already learned and ended-game purchases leave state unchanged', () => {
+  for (const status of ['playing', 'dead', 'won']) {
+    const game = arena(); game.status = status;
+    for (const id of ['unknown', '0-0-1', ...(status === 'playing' ? [] : ['0-0-6'])]) {
+      const before = serialize(game);
+      assert.equal(learn(game, id), false); assert.equal(serialize(game), before);
+    }
+  }
 });

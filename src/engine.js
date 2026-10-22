@@ -41,13 +41,31 @@ export function hasSight(game, from, to) {
   while (x !== to.x || y !== to.y) { const e = 2 * error; if (e >= dy) { error += dy; x += sx; } if (e <= dx) { error += dx; y += sy; } if (game.tiles[y]?.[x] !== 0) return false; }
   return true;
 }
+export function learningPlan(game, id) {
+  const pending = [];
+  let node = nodeMap.get(id);
+  while (node && !game.learned.includes(node.id)) {
+    pending.unshift(node);
+    node = nodeMap.get(node.parent);
+  }
+  const cost = pending.reduce((total, skill) => total + skill.cost, 0);
+  return { nodes: pending, cost, canLearn: game.status === 'playing' && pending.length > 0 && game.points >= cost };
+}
 export function learn(game, id) {
-  const node = nodeMap.get(id);
-  if (game.status !== 'playing' || !node || game.learned.includes(id) || (node.parent && !game.learned.includes(node.parent)) || game.points < node.cost) return false;
-  const oldMax = maxHealth(game); game.points -= node.cost; game.progress.pointsSpent += node.cost; game.learned.push(id); game.player.hp += maxHealth(game) - oldMax;
-  const spell = spellInfo(node.school, node.path, game.learned);
-  if (node.rank === 1) game.charges[spell.id] = spell.maxCharges;
-  log(game, `Learned ${node.name}.`, 'gold'); return true;
+  const plan = learningPlan(game, id);
+  if (!plan.canLearn) return false;
+  const oldMax = maxHealth(game);
+  game.points -= plan.cost; game.progress.pointsSpent += plan.cost;
+  game.learned.push(...plan.nodes.map(node => node.id));
+  game.player.hp += maxHealth(game) - oldMax;
+  for (const node of plan.nodes) {
+    if (node.rank === 1) {
+      const spell = spellInfo(node.school, node.path, game.learned);
+      game.charges[spell.id] = spell.maxCharges;
+    }
+    log(game, `Learned ${node.name}.`, 'gold');
+  }
+  return true;
 }
 function awardPoints(game, amount) { game.points += amount; game.progress.pointsEarned += amount; }
 function damageEnemy(game, enemy, amount) {
