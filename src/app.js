@@ -1,4 +1,5 @@
 import { schools, paths, nodes, nodeMap, spellInfo } from './catalog.js';
+import { getLocale, setLocale, translatePage } from './i18n.js';
 import { SIZE, createGame, availableSpells, maxHealth, distance, hasSight, learn, move, cast, wait, drink, serialize, restore } from './engine.js';
 const $ = id => document.getElementById(id);
 const SAVE_KEY = 'wild-shock-v1';
@@ -7,6 +8,7 @@ try { saved = localStorage.getItem(SAVE_KEY); } catch { storageAvailable = false
 let game = restore(saved) || createGame();
 let selected = null, hover = null, view = 'realm', schoolId = 0;
 const canvas = $('board'), ctx = canvas.getContext('2d'), tile = canvas.width / SIZE;
+const language = $('language-select'); language.value = getLocale(); language.onchange = () => setLocale(language.value);
 const sprites = {
   wizard: ['....aa....','...aaaa...','..aaaaaa..','...bbbb...','...bccb...','...bbbb...','..aaaaaa..','.aaaaaaaa.','.aa.aa.aa.','...a..a...'],
   imp: ['.a....a.','.aa..aa.','..aaaa..','.abc cba.'.replaceAll(' ', ''),'..aaaa..','...aa...','..aaaa..','.aa..aa.'],
@@ -82,7 +84,7 @@ function render() {
   $('outcome').hidden = game.status === 'playing';
   if (game.status !== 'playing') { $('outcome').innerHTML = `<div class="eyebrow">${game.status === 'won' ? 'THE EXPANSE IS MENDED' : 'THE EXPANSE REMEMBERS'}</div><h2>${game.status === 'won' ? 'A sovereign awakens.' : 'Even stars go dark.'}</h2><p>Realm ${game.realm} · ${game.kills} enemies defeated<br>${game.learned.length} skills learned · ${game.turn} turns</p><button id="restart-outcome">Begin another journey ↗</button>`; $('restart-outcome').onclick = () => $('new-dialog').showModal(); }
   if (view === 'tree') renderTree();
-  updateHint(); draw(); save();
+  updateHint(); draw(); save(); translatePage();
 }
 function updateHint(message) { const spell = availableSpells(game).find(s => s.id === selected); $('target-hint').textContent = message || (spell ? `${spell.name} · Click a target · Esc to cancel` : 'WASD / arrows to move · 1–9 to select a spell'); }
 function action(fn) { const done = fn(); if (done) { render(); setTimeout(() => { game.effects = []; draw(); }, 350); } else updateHint('That action is unavailable. Check range, walls and charges.'); }
