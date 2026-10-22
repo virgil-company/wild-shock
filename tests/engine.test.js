@@ -46,17 +46,24 @@ test('line of sight blocks casting through walls', () => {
 });
 test('casting consumes charges, harms enemies and advances their turn', () => {
   const game = arena(); game.enemies = [enemy(6, 11)]; assert.ok(cast(game, '0-0', { x: 6, y: 11 })); assert.equal(game.charges['0-0'], 6); assert.equal(game.enemies[0].hp, 21); assert.equal(game.turn, 1); assert.equal(game.enemies[0].x, 5);
+  assert.equal(game.progress.damageDealt, 9); assert.equal(game.progress.spellsCast, 1);
 });
 test('nova hits multiple enemies and frost prevents retaliation', () => {
   const game = arena(); game.enemies = [enemy(6, 11), enemy(7, 12, { id: 2 })]; cast(game, '1-1', { x: 6, y: 11 }); assert.ok(game.enemies.every(e => e.hp < 30));
   game.enemies = [enemy(4, 11)]; const hp = game.player.hp; cast(game, '2-2', { x: 4, y: 11 }); assert.equal(game.player.hp, hp); assert.equal(game.enemies[0].x, 4);
 });
 test('potions restore reserves and still allow enemy retaliation', () => {
-  const game = arena(); game.player.hp = 1; game.charges['0-0'] = 0; game.enemies = [enemy(4, 11)]; drink(game); assert.equal(game.player.hp, maxHealth(game) - 3); assert.equal(game.charges['0-0'], 7); assert.equal(game.potions, 2); assert.equal(game.turn, 1);
+  const game = arena(); game.player.hp = 1; game.charges['0-0'] = 0; game.enemies = [enemy(4, 11)]; drink(game); assert.equal(game.player.hp, maxHealth(game) - 3); assert.equal(game.charges['0-0'], 7); assert.equal(game.potions, 2); assert.equal(game.turn, 1); assert.equal(game.progress.potionsUsed, 1);
 });
 test('clearing rewards points once and rifts advance the campaign', () => {
   const game = arena(); game.enemies = [enemy(4, 11, { hp: 1 })]; move(game, 1, 0); assert.equal(game.points, 18); wait(game); assert.equal(game.points, 18);
-  game.player.x = 18; game.player.y = 7; move(game, 1, 0); assert.equal(game.realm, 2); assert.equal(game.player.hp, maxHealth(game)); assert.ok(game.enemies.length > 0);
+  assert.equal(game.progress.damageDealt, 1); assert.equal(game.progress.staffStrikes, 1); assert.equal(game.progress.pointsEarned, 6);
+  game.player.x = 18; game.player.y = 7; move(game, 1, 0); assert.equal(game.realm, 2); assert.equal(game.player.hp, maxHealth(game)); assert.ok(game.enemies.length > 0); assert.equal(game.progress.realmsCleared, 1);
+});
+test('progress records skill point spending and migrates older saves', () => {
+  const game = arena(); assert.ok(learn(game, '0-0-2')); assert.equal(game.progress.pointsSpent, 1);
+  const oldSave = JSON.parse(serialize(game)); delete oldSave.progress;
+  assert.deepEqual(restore(JSON.stringify(oldSave)).progress, { damageDealt: 0, pointsEarned: 0, pointsSpent: 0, spellsCast: 0, staffStrikes: 0, potionsUsed: 0, realmsCleared: 0 });
 });
 test('final rift wins and death prevents further actions', () => {
   const game = arena(); game.realm = 24; game.player.x = 18; game.player.y = 7; move(game, 1, 0); assert.equal(game.status, 'won'); assert.equal(wait(game), false);

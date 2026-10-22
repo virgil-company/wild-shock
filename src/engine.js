@@ -7,7 +7,8 @@ export function log(game, message, tone = '') { game.log.unshift({ message, tone
 export function maxHealth(game) { return 55 + schools.reduce((total, school) => total + getStats(game.learned, school.id).vitality, 0); }
 export function createGame(seed = Date.now() % 2147483647) {
   const game = { version: 1, seed, realm: 1, turn: 0, points: 12, learned: ['0-0-1', '1-1-1', '2-2-1'],
-    player: { x: 3, y: 11, hp: 55, shield: 0 }, charges: {}, potions: 3, kills: 0, status: 'playing', log: [], effects: [], theme: 0 };
+    player: { x: 3, y: 11, hp: 55, shield: 0 }, charges: {}, potions: 3, kills: 0, status: 'playing', log: [], effects: [], theme: 0,
+    progress: { damageDealt: 0, pointsEarned: 0, pointsSpent: 0, spellsCast: 0, staffStrikes: 0, potionsUsed: 0, realmsCleared: 0 } };
   generateRealm(game); log(game, 'The rift opens. Your next move is yours.', 'gold'); return game;
 }
 export function availableSpells(game) { return game.learned.filter(id => nodeMap.get(id)?.rank === 1).map(id => { const node = nodeMap.get(id); return spellInfo(node.school, node.path, game.learned); }); }
@@ -43,10 +44,16 @@ export function hasSight(game, from, to) {
 export function learn(game, id) {
   const node = nodeMap.get(id);
   if (game.status !== 'playing' || !node || game.learned.includes(id) || (node.parent && !game.learned.includes(node.parent)) || game.points < node.cost) return false;
-  const oldMax = maxHealth(game); game.points -= node.cost; game.learned.push(id); game.player.hp += maxHealth(game) - oldMax;
+  const oldMax = maxHealth(game); game.points -= node.cost; game.progress.pointsSpent += node.cost; game.learned.push(id); game.player.hp += maxHealth(game) - oldMax;
   const spell = spellInfo(node.school, node.path, game.learned);
   if (node.rank === 1) game.charges[spell.id] = spell.maxCharges;
   log(game, `Learned ${node.name}.`, 'gold'); return true;
+}
+function awardPoints(game, amount) { game.points += amount; game.progress.pointsEarned += amount; }
+function damageEnemy(game, enemy, amount) {
+  const dealt = Math.min(enemy.hp, Math.max(0, amount));
+  enemy.hp -= dealt; game.progress.damageDealt += dealt;
+  return dealt;
 }
 function damagePlayer(game, amount) {
   const armor = Math.floor(schools.reduce((n, s) => n + getStats(game.learned, s.id).armor, 0) / 3);
@@ -55,14 +62,14 @@ function damagePlayer(game, amount) {
 }
 function cleanup(game) {
   const dead = game.enemies.filter(e => e.hp <= 0); game.kills += dead.length;
-  for (const enemy of dead) { log(game, `${enemy.name} falls.`, 'green'); if (enemy.boss) game.points += 5; }
+  for (const enemy of dead) { log(game, `${enemy.name} falls.`, 'green'); if (enemy.boss) awardPoints(game, 5); }
   game.enemies = game.enemies.filter(e => e.hp > 0);
-  if (dead.length && !game.enemies.length) { game.points += 6 + Math.floor(game.realm / 3); log(game, 'Realm cleared. Both rifts are now open. Skill points awarded.', 'gold'); }
+  if (dead.length && !game.enemies.length) { awardPoints(game, 6 + Math.floor(game.realm / 3)); log(game, 'Realm cleared. Both rifts are now open. Skill points awarded.', 'gold'); }
 }
 export function endTurn(game) {
   game.turn++;
   for (const enemy of game.enemies) {
-    for (const status of ['burn', 'poison']) if (enemy.statuses[status] > 0) { enemy.hp -= status === 'burn' ? 3 : 2; enemy.statuses[status]--; }
+    for (const status of ['burn', 'poison']) if (enemy.statuses[status] > 0) { damageEnemy(game, enemy, status === 'burn' ? 3 : 2); enemy.statuses[status]--; }
     if (enemy.hp <= 0) continue;
     if (enemy.statuses.freeze > 0) { enemy.statuses.freeze--; continue; }
     if (enemy.statuses.shock > 0) { enemy.statuses.shock--; if (game.turn % 2 === 0) continue; }
@@ -87,13 +94,13 @@ export function move(game, dx, dy) {
   const p = { x: game.player.x + dx, y: game.player.y + dy };
   if (game.tiles[p.y]?.[p.x] !== 0) return false;
   const enemy = game.enemies.find(e => distance(e, p) === 0);
-  if (enemy) { enemy.hp -= 5 + Math.floor(game.realm / 3); game.effects = [{ ...p, color: '#ded6b7' }]; log(game, 'Your staff strikes.'); cleanup(game); }
+  if (enemy) { damageEnemy(game, enemy, 5 + Math.floor(game.realm / 3)); game.progress.staffStrikes++; game.effects = [{ ...p, color: '#ded6b7' }]; log(game, 'Your staff strikes.'); cleanup(game); }
   else {
     Object.assign(game.player, p);
     const item = game.items.find(i => distance(i, p) === 0);
-    if (item) { if (item.type === 'shard') { game.points += 3; log(game, 'Memory shard: +3 skill points.', 'gold'); } else { game.potions++; log(game, 'Restoration draught collected.', 'green'); } game.items = game.items.filter(i => i !== item); }
+    if (item) { if (item.type === 'shard') { awardPoints(game, 3); log(game, 'Memory shard: +3 skill points.', 'gold'); } else { game.potions++; log(game, 'Restoration draught collected.', 'green'); } game.items = game.items.filter(i => i !== item); }
     const portal = game.portals.find(r => distance(r, p) === 0);
-    if (portal && !game.enemies.length) { if (game.realm === FINAL_REALM) { game.status = 'won'; log(game, 'The final rift is sealed. You are the Wild Sovereign.', 'gold'); return true; } game.realm++; game.theme = portal.theme; game.player.hp = maxHealth(game); generateRealm(game); log(game, `Entered realm ${game.realm}. Health and spell charges restored.`, 'gold'); return true; }
+    if (portal && !game.enemies.length) { game.progress.realmsCleared++; if (game.realm === FINAL_REALM) { game.status = 'won'; log(game, 'The final rift is sealed. You are the Wild Sovereign.', 'gold'); return true; } game.realm++; game.theme = portal.theme; game.player.hp = maxHealth(game); generateRealm(game); log(game, `Entered realm ${game.realm}. Health and spell charges restored.`, 'gold'); return true; }
   }
   endTurn(game); return true;
 }
@@ -101,7 +108,7 @@ export function cast(game, spellId, target) {
   if (game.status !== 'playing') return false;
   const spell = availableSpells(game).find(s => s.id === spellId);
   if (!spell || !game.charges[spellId] || !Number.isInteger(target.x) || !Number.isInteger(target.y) || game.tiles[target.y]?.[target.x] !== 0 || distance(game.player, target) > spell.range || !hasSight(game, game.player, target)) return false;
-  game.charges[spellId]--; game.effects = [];
+  game.charges[spellId]--; game.progress.spellsCast++; game.effects = [];
   let targets = game.enemies.filter(e => distance(e, target) <= spell.radius);
   if (spell.path === 2) {
     const dx = target.x - game.player.x, dy = target.y - game.player.y;
@@ -114,7 +121,7 @@ export function cast(game, spellId, target) {
   for (const enemy of targets) {
     const resist = enemy.school === spell.school ? Math.max(0, 3 - spell.stats.pierce) : 0;
     const damage = Math.max(1, spell.damage - resist) + spell.stats.echo;
-    enemy.hp -= damage; game.effects.push({ x: enemy.x, y: enemy.y, color: spell.color });
+    damageEnemy(game, enemy, damage); game.effects.push({ x: enemy.x, y: enemy.y, color: spell.color });
     if (['burn', 'freeze', 'poison', 'shock'].includes(spell.effect)) enemy.statuses[spell.effect] = spell.duration;
     game.player.hp = Math.min(maxHealth(game), game.player.hp + spell.stats.leech + (spell.effect === 'drain' ? 3 : 0));
   }
@@ -124,8 +131,13 @@ export function cast(game, spellId, target) {
   cleanup(game); endTurn(game); return true;
 }
 export function wait(game) { if (game.status !== 'playing') return false; log(game, 'You wait.'); endTurn(game); return true; }
-export function drink(game) { if (game.status !== 'playing' || !game.potions) return false; game.potions--; game.player.hp = maxHealth(game); for (const spell of availableSpells(game)) game.charges[spell.id] = spell.maxCharges; log(game, 'Restored health and all spell charges.', 'green'); endTurn(game); return true; }
+export function drink(game) { if (game.status !== 'playing' || !game.potions) return false; game.potions--; game.progress.potionsUsed++; game.player.hp = maxHealth(game); for (const spell of availableSpells(game)) game.charges[spell.id] = spell.maxCharges; log(game, 'Restored health and all spell charges.', 'green'); endTurn(game); return true; }
 export function serialize(game) { return JSON.stringify(game); }
 export function restore(value) {
-  try { const game = JSON.parse(value); if (game.version !== 1 || !Number.isInteger(game.seed) || !Number.isInteger(game.realm) || game.realm < 1 || game.realm > FINAL_REALM || !Array.isArray(game.learned) || !game.learned.every(id => nodeMap.has(id)) || new Set(game.learned).size !== game.learned.length || !['playing', 'dead', 'won'].includes(game.status) || !Array.isArray(game.tiles) || game.tiles.length !== SIZE || !game.tiles.every(row => Array.isArray(row) && row.length === SIZE && row.every(t => t === 0 || t === 1)) || !Number.isFinite(game.player?.hp) || !Number.isInteger(game.player.x) || !Number.isInteger(game.player.y) || game.tiles[game.player.y]?.[game.player.x] !== 0 || !Array.isArray(game.enemies) || !Array.isArray(game.items) || !Array.isArray(game.portals) || !Array.isArray(game.log) || !game.charges || !Number.isFinite(game.points)) return null; return game; } catch { return null; }
+  try { const game = JSON.parse(value); if (game.version !== 1 || !Number.isInteger(game.seed) || !Number.isInteger(game.realm) || game.realm < 1 || game.realm > FINAL_REALM || !Array.isArray(game.learned) || !game.learned.every(id => nodeMap.has(id)) || new Set(game.learned).size !== game.learned.length || !['playing', 'dead', 'won'].includes(game.status) || !Array.isArray(game.tiles) || game.tiles.length !== SIZE || !game.tiles.every(row => Array.isArray(row) && row.length === SIZE && row.every(t => t === 0 || t === 1)) || !Number.isFinite(game.player?.hp) || !Number.isInteger(game.player.x) || !Number.isInteger(game.player.y) || game.tiles[game.player.y]?.[game.player.x] !== 0 || !Array.isArray(game.enemies) || !Array.isArray(game.items) || !Array.isArray(game.portals) || !Array.isArray(game.log) || !game.charges || !Number.isFinite(game.points)) return null;
+    const defaults = { damageDealt: 0, pointsEarned: 0, pointsSpent: 0, spellsCast: 0, staffStrikes: 0, potionsUsed: 0, realmsCleared: 0 };
+    game.progress = { ...defaults, ...game.progress };
+    if (!Object.values(game.progress).every(value => Number.isInteger(value) && value >= 0)) return null;
+    return game;
+  } catch { return null; }
 }
