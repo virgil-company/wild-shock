@@ -1,12 +1,14 @@
 import { materials, artifacts, canCraft, enhanceSpell } from './artifacts.js';
 import { schools, paths, nodes, nodeMap, spellInfo } from './catalog.js';
 import { getLocale, setLocale, translatePage } from './i18n.js';
-import { craft, transmute, threateningEnemies, previewPortal, SIZE, createGame, availableSpells, maxHealth, distance, hasSight, learningPlan, learn, move, cast, wait, drink, serialize, restore } from './engine.js';
+import { craft, transmute, threateningEnemies, previewPortal, SIZE, createGame, availableSpells, maxHealth, distance, hasSight, shortestPath, learningPlan, learn, move, cast, wait, drink, serialize, restore } from './engine.js';
+import { catalogueCounts, equipmentSlots } from './rw3.js';
 const $ = id => document.getElementById(id);
 const SAVE_KEY = 'wild-shock-v1';
+const isLocalDevelopment = ['localhost', '127.0.0.1', '[::1]', '::1'].includes(window.location.hostname);
 let storageAvailable = true, saved;
 try { saved = localStorage.getItem(SAVE_KEY); } catch { storageAvailable = false; }
-let game = restore(saved) || createGame();
+let game = restore(saved) || createGame(undefined, { enableBigBang: isLocalDevelopment });
 let selected = null, hover = null, view = 'realm', schoolId = 0, showThreats = false;
 const canvas = $('board'), ctx = canvas.getContext('2d'), tile = canvas.width / SIZE;
 const language = $('language-select'); language.value = getLocale(); language.onchange = () => setLocale(language.value);
@@ -58,6 +60,7 @@ function draw() {
     const cx = item.x * tile + 16, cy = item.y * tile + 16;
     ctx.fillStyle = item.type === 'shard' ? '#dad29c' : '#ad9bbd';
     if (item.type === 'component') { ctx.fillStyle = { spark: '#d4cc79', ember: '#ee9270', crystal: '#8fc9dd' }[item.material]; ctx.font = 'bold 18px monospace'; ctx.fillText({ spark: 'S', ember: 'E', crystal: 'C' }[item.material], cx - 6, cy + 6); }
+    else if (item.type === 'rw3-component') { ctx.fillStyle = '#d7a6e8'; ctx.font = 'bold 16px monospace'; ctx.fillText('◇', cx - 6, cy + 6); }
     else if (item.type === 'shard') { ctx.beginPath(); ctx.moveTo(cx, cy - 7); ctx.lineTo(cx + 5, cy); ctx.lineTo(cx, cy + 7); ctx.lineTo(cx - 5, cy); ctx.closePath(); ctx.fill(); }
     else { ctx.fillRect(cx - 4, cy - 3, 8, 10); ctx.fillRect(cx - 2, cy - 7, 4, 4); }
   }
@@ -87,7 +90,7 @@ function render() {
   $('rift-status').textContent = game.enemies.length ? '◇ Rifts sealed until the realm is clear' : '✧ Rifts open. Walk into either portal.';
   $('potion-button').disabled = !game.potions || game.status !== 'playing'; $('wait-button').disabled = game.status !== 'playing';
   const spells = availableSpells(game); $('spell-count').textContent = String(spells.length).padStart(2, '0');
-  $('spell-list').innerHTML = spells.map((s, i) => `<button class="spell ${selected === s.id ? 'selected' : ''}" data-spell="${s.id}" aria-pressed="${selected === s.id}" ${!game.charges[s.id] || game.status !== 'playing' ? 'disabled' : ''}><span class="spell-icon" style="color:${s.color}">${s.icon}</span><span class="spell-text"><strong>${s.name}</strong><small>${s.damage} DMG · ${s.range} RANGE${s.radius ? ` · ${s.radius} AOE` : ''}</small></span><small>${game.charges[s.id]}/${s.maxCharges}<br>${i < 9 ? `[${i + 1}]` : ''}</small></button>`).join('');
+  $('spell-list').innerHTML = spells.map((s, i) => `<button class="spell ${selected === s.id ? 'selected' : ''}" data-spell="${s.id}" data-tooltip="${s.effect}. Select, then click a visible target in range.${i < 9 ? ` Shortcut: ${i + 1}.` : ''}" aria-label="${s.name}: ${s.effect}. ${s.damage} damage, ${s.range} range." aria-pressed="${selected === s.id}" ${!game.charges[s.id] || game.status !== 'playing' ? 'disabled' : ''}><span class="spell-icon" style="color:${s.color}" aria-hidden="true">${s.icon}</span><span class="spell-text"><strong>${s.name}</strong><small>${s.damage} DMG · ${s.range} RANGE${s.radius ? ` · ${s.radius} AOE` : ''}</small></span><small>${game.charges[s.id]}/${s.maxCharges}<br>${i < 9 ? `[${i + 1}]` : ''}</small></button>`).join('');
   $('log').replaceChildren(...game.log.slice(0, 12).map(entry => { const row = document.createElement('div'); row.className = ['gold', 'red', 'green'].includes(entry.tone) ? entry.tone : ''; const time = document.createElement('time'); time.textContent = String(entry.turn).padStart(3, '0'); row.append(time, document.createTextNode(entry.message)); return row; }));
   const counts = schools.map(s => game.learned.filter(id => nodeMap.get(id).school === s.id).length); const strongest = schools[counts.indexOf(Math.max(...counts))]; $('build-label').textContent = `${strongest.name} ${game.learned.length > 20 ? 'archmage' : 'initiate'}`;
   $('outcome').hidden = game.status === 'playing';
@@ -100,12 +103,16 @@ function render() {
   if (view === 'tree') renderTree();
   updateHint(); draw(); save(); translatePage();
 }
-function updateHint(message) { const spell = availableSpells(game).find(s => s.id === selected); $('target-hint').textContent = message || (spell ? `${spell.name} · Click a target · Esc to cancel` : 'WASD / arrows to move · 1–9 to select a spell'); }
+function updateHint(message) { const spell = availableSpells(game).find(s => s.id === selected); $('target-hint').textContent = message || (spell ? `${spell.name} · Click a target · Esc to cancel` : 'Click a floor tile or use WASD / arrows to move · 1–9 to select a spell'); }
 function action(fn) { const done = fn(); if (done) { render(); setTimeout(() => { game.effects = []; draw(); }, 350); } else updateHint('That action is unavailable. Check range, walls and charges.'); }
 function renderForge() {
-  $('component-stock').textContent = materials.map(key => `${key}: ${game.components[key]}`).join(' · ');
+  const counts = catalogueCounts();
+  $('component-stock').textContent = `${materials.map(key => `${key}: ${game.components[key]}`).join(' · ')} · ${game.rw3Components.length} tagged components`;
+  $('rw3-catalogue').textContent = `${counts.spells} spells · ${counts.equipment} equipment · ${counts.components} components`;
+  $('rw3-inventory').textContent = game.rw3Components.length ? game.rw3Components.join(' · ') : 'No tagged components collected yet.';
+  $('rw3-equipment').textContent = equipmentSlots.map(slot => `${slot}: ${game.equipment?.[slot]?.name || '—'}`).join(' · ');
   $('artifact-count').textContent = `${game.artifacts.length} / ${artifacts.length}`;
-  $('artifact-list').innerHTML = artifacts.map(item => `<div class="artifact-card"><strong>${item.name}</strong><p>${item.description}</p><small>${Object.entries(item.recipe).map(([key, count]) => `${count} ${key}`).join(' + ')}</small><button data-craft="${item.id}" ${canCraft(game, item.id) ? '' : 'disabled'}>${game.artifacts.includes(item.id) ? 'Equipped' : 'Craft'}</button></div>`).join('');
+  $('artifact-list').innerHTML = artifacts.map(item => `<div class="artifact-card"><strong>${item.name}</strong><p>${item.description}</p><small>${Object.entries(item.recipe).map(([key, count]) => `${count} ${key}`).join(' + ')}</small><button data-craft="${item.id}" data-tooltip="Crafting is instant and does not consume a turn" ${canCraft(game, item.id) ? '' : 'disabled'}>${game.artifacts.includes(item.id) ? 'Equipped' : 'Craft'}</button></div>`).join('');
   const shrine = game.shrine, near = shrine && distance(game.player, shrine) <= 1;
   $('shrine-state').textContent = shrine ? `${shrine.uses} uses · ${near ? 'Within reach' : 'Stand beside the blue shrine'}` : 'Find a shrine in the next realm.';
   $('transmute-button').disabled = game.status !== 'playing' || !near || !shrine.uses || $('material-from').value === $('material-to').value || !game.components[$('material-from').value];
@@ -116,7 +123,7 @@ function inspect(p) {
   if (enemy) { $('inspection').innerHTML = `<div class="inspect-symbol" style="color:${schools[enemy.school].color}">${schools[enemy.school].icon}</div><h3>${enemy.name}</h3><p>${enemy.hp} / ${enemy.maxHp} HP · ${enemy.damage} damage<br>Resists ${schools[enemy.school].name} by 3<br><span style="color:var(--gold)">${enemy.statuses.freeze ? 'Frozen: skips its next turn' : distance(enemy, game.player) <= enemy.range && hasSight(game, enemy, game.player) ? 'Next: attack the Riftwalker' : 'Next: move toward you'}</span></p>`; }
   else if (game.portals.some(r => distance(r, p) === 0)) { const portal = game.portals.find(r => distance(r, p) === 0), next = previewPortal(game, portal.theme); $('inspection').innerHTML = `<div class="inspect-symbol">◈</div><h3>${portal.theme ? 'Emberfall' : 'Mossbound'} rift</h3><p>${game.enemies.length ? 'Defeat all hostiles to unlock.' : 'Step inside to advance. Health and spell charges will be restored.'}</p><p>${next ? `Next realm: ${next.enemies} hostiles${next.boss ? ' · BOSS' : ''}<br>Affinities: ${next.schools.map(id => schools[id].name).join(', ')}<br>Materials: ${next.components.join(', ')}<br>${next.shrine} shrine · 3 uses` : 'Final portal: complete your journey.'}</p>`; }
   else if (game.shrine && distance(game.shrine, p) === 0) { $('inspection').innerHTML = `<div class="inspect-symbol">⚒</div><h3>Transmutation shrine</h3><p>${game.shrine.uses} uses remaining. Stand within one tile, then use the forge to exchange one component for another. Each exchange consumes a turn.</p>`; }
-  else if (game.items.some(i => distance(i, p) === 0)) { const item = game.items.find(i => distance(i, p) === 0); $('inspection').textContent = item.type === 'component' ? `${item.material} component — walk here to collect crafting material.` : item.type === 'shard' ? 'Memory shard — collect 3 skill points.' : 'Restoration draught — restores health and charges when used.'; }
+  else if (game.items.some(i => distance(i, p) === 0)) { const item = game.items.find(i => distance(i, p) === 0); $('inspection').textContent = item.type === 'component' ? `${item.material} component — walk here to collect crafting material.` : item.type === 'rw3-component' ? `${item.name} — tagged crafting component.` : item.type === 'shard' ? 'Memory shard — collect 3 skill points.' : 'Restoration draught — restores health and charges when used.'; }
   else if (distance(game.player, p) === 0) $('inspection').innerHTML = `<div class="inspect-symbol">✧</div><h3>The Riftwalker</h3><p>${game.player.hp} / ${maxHealth(game)} health · ${game.player.shield} ward<br>${game.points} skill points · ${game.potions} draughts</p>`;
   else $('inspection').innerHTML = '<div class="inspect-symbol">⌖</div><h3>Know your enemy.</h3><p>Hover over a creature to reveal its health, resistance and next action.</p>';
 }
@@ -149,7 +156,7 @@ $('transmute-button').onclick = () => action(() => transmute(game, $('material-f
 $('threat-button').onclick = () => { showThreats = !showThreats; renderForge(); draw(); };
 $('realm-tab').onclick = () => setView('realm'); $('tree-tab').onclick = $('atlas-cta').onclick = () => setView('tree');
 $('guide-button').onclick = () => $('guide-dialog').showModal(); $('new-button').onclick = () => $('new-dialog').showModal();
-$('cancel-new').onclick = () => $('new-dialog').close(); $('confirm-new').onclick = () => { const input = $('new-seed'); if (!input.checkValidity()) { input.reportValidity(); return; } game = input.value ? createGame(Number(input.value)) : createGame(); selected = null; hover = null; $('new-dialog').close(); setView('realm'); render(); };
+$('cancel-new').onclick = () => $('new-dialog').close(); $('confirm-new').onclick = () => { const input = $('new-seed'); if (!input.checkValidity()) { input.reportValidity(); return; } game = input.value ? createGame(Number(input.value), { enableBigBang: isLocalDevelopment }) : createGame(undefined, { enableBigBang: isLocalDevelopment }); selected = null; hover = null; $('new-dialog').close(); setView('realm'); render(); };
 for (const button of document.querySelectorAll('.close-dialog')) button.onclick = () => button.closest('dialog').close();
 $('spell-list').onclick = event => { const button = event.target.closest('[data-spell]'); if (!button || button.disabled) return; selected = selected === button.dataset.spell ? null : button.dataset.spell; render(); };
 $('school-tabs').onclick = event => { const button = event.target.closest('[data-school]'); if (button) { schoolId = Number(button.dataset.school); renderTree(); } };
@@ -158,8 +165,25 @@ $('skill-search').oninput = $('skill-filter').onchange = renderTree;
 $('wait-button').onclick = () => action(() => wait(game)); $('potion-button').onclick = () => action(() => drink(game));
 for (const button of document.querySelectorAll('[data-move]')) button.onclick = () => action(() => move(game, ...button.dataset.move.split(',').map(Number)));
 function tileAt(event) { const bounds = canvas.getBoundingClientRect(); return { x: Math.min(SIZE - 1, Math.max(0, Math.floor((event.clientX - bounds.left) / bounds.width * SIZE))), y: Math.min(SIZE - 1, Math.max(0, Math.floor((event.clientY - bounds.top) / bounds.height * SIZE))) }; }
+function walkTo(target) {
+  if (game.status !== 'playing' || game.tiles[target.y]?.[target.x] !== 0) return false;
+  let moved = false;
+  // Enemies move after every step, so find a new shortest route from the
+  // current position rather than following a route that may now be blocked.
+  for (let steps = 0; steps < SIZE * SIZE && game.status === 'playing' && distance(game.player, target) !== 0; steps++) {
+    const path = shortestPath(game, game.player, target);
+    if (!path?.length) break;
+    const next = path[0], before = { ...game.player };
+    if (!move(game, next.x - game.player.x, next.y - game.player.y)) break;
+    moved = true;
+    // An occupied next tile is attacked rather than entered; stop here so a
+    // click never turns into repeated automatic staff attacks.
+    if (distance(before, game.player) !== 1) break;
+  }
+  return moved;
+}
 canvas.onpointermove = event => { hover = tileAt(event); inspect(hover); draw(); }; canvas.onpointerleave = () => { hover = null; draw(); };
-canvas.onclick = event => { const target = tileAt(event); if (selected) action(() => cast(game, selected, target)); else if (Math.abs(target.x - game.player.x) + Math.abs(target.y - game.player.y) === 1) action(() => move(game, target.x - game.player.x, target.y - game.player.y)); else inspect(target); };
+canvas.onclick = event => { const target = tileAt(event); if (selected) action(() => cast(game, selected, target)); else if (distance(game.player, target) > 0) action(() => walkTo(target)); else inspect(target); };
 document.addEventListener('keydown', event => {
   if (document.querySelector('dialog[open]') || ['INPUT', 'SELECT', 'TEXTAREA'].includes(event.target.tagName) || event.ctrlKey || event.metaKey || event.altKey) return;
   const key = event.key.toLowerCase(); if (key === 't') { event.preventDefault(); setView(view === 'tree' ? 'realm' : 'tree'); return; }

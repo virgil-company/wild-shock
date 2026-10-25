@@ -1,19 +1,31 @@
 import { materials, artifacts, hasArtifact, enhanceSpell, canCraft } from './artifacts.js';
 import { schools, nodeMap, getStats, spellInfo } from './catalog.js';
+import { addComponent, forge as forgeEquipment, componentByName } from './rw3.js';
 export const SIZE = 23;
 export const FINAL_REALM = 24;
+export const BIG_BANG_SEED = 666;
+export const bigBangSpell = Object.freeze({
+  id: 'dev-big-bang', name: 'Big Bang', color: '#fff3a1', icon: '✹', damage: 50000,
+  range: SIZE, radius: SIZE, chains: 0, maxCharges: 1, duration: 0, stats: { pierce: 0, echo: 0, leech: 0, vitality: 0, armor: 0 },
+  effect: 'annihilation', global: true,
+});
 export const distance = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 export function random(seed) { let state = seed >>> 0; return () => { state += 0x6D2B79F5; let n = state; n = Math.imul(n ^ n >>> 15, n | 1); n ^= n + Math.imul(n ^ n >>> 7, n | 61); return ((n ^ n >>> 14) >>> 0) / 4294967296; }; }
 export function log(game, message, tone = '') { game.log.unshift({ message, tone, turn: game.turn }); game.log = game.log.slice(0, 60); }
 export function maxHealth(game) { return 55 + schools.reduce((total, school) => total + getStats(game.learned, school.id).vitality, 0); }
-export function createGame(seed = Date.now() % 2147483647) {
+export function createGame(seed = Date.now() % 2147483647, { enableBigBang = false } = {}) {
   const game = { version: 1, seed, realm: 1, turn: 0, points: 12, learned: ['0-0-1', '1-1-1', '2-2-1'],
-    components: { spark: 1, ember: 1, crystal: 1 }, artifacts: [], artifactCasts: 0,
+    components: { spark: 1, ember: 1, crystal: 1 }, rw3Components: [], equipment: {}, artifacts: [], artifactCasts: 0,
     player: { x: 3, y: 11, hp: 55, shield: 0 }, charges: {}, potions: 3, kills: 0, status: 'playing', log: [], effects: [], theme: 0,
+    bigBangEnabled: seed === BIG_BANG_SEED && enableBigBang,
     progress: { damageDealt: 0, pointsEarned: 0, pointsSpent: 0, spellsCast: 0, staffStrikes: 0, potionsUsed: 0, realmsCleared: 0 } };
   generateRealm(game); log(game, 'The rift opens. Your next move is yours.', 'gold'); return game;
 }
-export function availableSpells(game) { return game.learned.filter(id => nodeMap.get(id)?.rank === 1).map(id => { const node = nodeMap.get(id); return enhanceSpell(game, spellInfo(node.school, node.path, game.learned)); }); }
+export function availableSpells(game) {
+  const spells = game.learned.filter(id => nodeMap.get(id)?.rank === 1).map(id => { const node = nodeMap.get(id); return enhanceSpell(game, spellInfo(node.school, node.path, game.learned)); });
+  if (game.seed === BIG_BANG_SEED && game.bigBangEnabled) spells.unshift(bigBangSpell);
+  return spells;
+}
 export function generateRealm(game) {
   const rng = random(game.seed + game.realm * 7919 + game.theme * 101);
   game.tiles = Array.from({ length: SIZE }, (_, y) => Array.from({ length: SIZE }, (_, x) => x === 0 || y === 0 || x === SIZE - 1 || y === SIZE - 1 ? 1 : rng() < .13 ? 1 : 0));
@@ -37,6 +49,9 @@ export function generateRealm(game) {
   }
   for (let i = 0; i < 3; i++) game.items.push({ ...position(), type: i === 2 ? 'potion' : 'shard' });
   for (let i = 0; i < 3; i++) game.items.push({ ...position(), type: 'component', material: materials[i === 2 ? 2 : game.theme ? 1 : 0] });
+  // A named component is the crafting currency for the full RW3-style forge.
+  const named = [...componentByName.keys()];
+  for (let i = 0; i < 2; i++) game.items.push({ ...position(), type: 'rw3-component', name: named[Math.floor(rng() * named.length)] });
   game.shrine = { ...position(), uses: 3 };
   game.charges = Object.fromEntries(availableSpells(game).map(s => [s.id, s.maxCharges])); game.effects = [];
 }
@@ -44,6 +59,30 @@ export function hasSight(game, from, to) {
   let x = from.x, y = from.y; const dx = Math.abs(to.x - x), sx = x < to.x ? 1 : -1, dy = -Math.abs(to.y - y), sy = y < to.y ? 1 : -1; let error = dx + dy;
   while (x !== to.x || y !== to.y) { const e = 2 * error; if (e >= dy) { error += dy; x += sx; } if (e <= dx) { error += dx; y += sy; } if (game.tiles[y]?.[x] !== 0) return false; }
   return true;
+}
+// Returns the shortest cardinal route through floor tiles, excluding the
+// starting tile. Walls are the only fixed movement obstacle; units can change
+// position after every turn, so callers should recalculate before each step.
+export function shortestPath(game, from, target) {
+  if (!Number.isInteger(target?.x) || !Number.isInteger(target?.y) || game.tiles[target.y]?.[target.x] !== 0) return null;
+  if (from.x === target.x && from.y === target.y) return [];
+  const startKey = `${from.x},${from.y}`, targetKey = `${target.x},${target.y}`;
+  const queue = [{ x: from.x, y: from.y }], previous = new Map([[startKey, null]]);
+  for (let i = 0; i < queue.length; i++) {
+    const current = queue[i];
+    for (const [dx, dy] of [[0, -1], [-1, 0], [1, 0], [0, 1]]) {
+      const next = { x: current.x + dx, y: current.y + dy }, key = `${next.x},${next.y}`;
+      if (game.tiles[next.y]?.[next.x] !== 0 || previous.has(key)) continue;
+      previous.set(key, current);
+      if (key === targetKey) {
+        const path = [];
+        for (let step = next; `${step.x},${step.y}` !== startKey; step = previous.get(`${step.x},${step.y}`)) path.unshift(step);
+        return path;
+      }
+      queue.push(next);
+    }
+  }
+  return null;
 }
 export function learningPlan(game, id) {
   const pending = [];
@@ -121,7 +160,7 @@ export function move(game, dx, dy) {
   else {
     Object.assign(game.player, p);
     const item = game.items.find(i => distance(i, p) === 0);
-    if (item) { if (item.type === 'component') { game.components[item.material]++; log(game, `Collected ${item.material}.`, 'gold'); } else if (item.type === 'shard') { awardPoints(game, 3); log(game, 'Memory shard: +3 skill points.', 'gold'); } else { game.potions++; log(game, 'Restoration draught collected.', 'green'); } game.items = game.items.filter(i => i !== item); }
+    if (item) { if (item.type === 'component') { game.components[item.material]++; log(game, `Collected ${item.material}.`, 'gold'); } else if (item.type === 'rw3-component') { addComponent(game, item.name); log(game, `Collected ${item.name}.`, 'gold'); } else if (item.type === 'shard') { awardPoints(game, 3); log(game, 'Memory shard: +3 skill points.', 'gold'); } else { game.potions++; log(game, 'Restoration draught collected.', 'green'); } game.items = game.items.filter(i => i !== item); }
     const portal = game.portals.find(r => distance(r, p) === 0);
     if (portal && !game.enemies.length) { game.progress.realmsCleared++; if (game.realm === FINAL_REALM) { game.status = 'won'; log(game, 'The final rift is sealed. You are the Wild Sovereign.', 'gold'); return true; } game.realm++; game.theme = portal.theme; game.player.hp = maxHealth(game); generateRealm(game); log(game, `Entered realm ${game.realm}. Health and spell charges restored.`, 'gold'); return true; }
   }
@@ -132,8 +171,8 @@ export function cast(game, spellId, target) {
   const spell = availableSpells(game).find(s => s.id === spellId);
   if (!spell || !game.charges[spellId] || !Number.isInteger(target.x) || !Number.isInteger(target.y) || game.tiles[target.y]?.[target.x] !== 0 || distance(game.player, target) > spell.range || !hasSight(game, game.player, target)) return false;
   game.charges[spellId]--; game.progress.spellsCast++; game.effects = [];
-  let targets = game.enemies.filter(e => distance(e, target) <= spell.radius);
-  if (spell.path === 2) {
+  let targets = spell.global ? [...game.enemies] : game.enemies.filter(e => distance(e, target) <= spell.radius);
+  if (!spell.global && spell.path === 2) {
     const dx = target.x - game.player.x, dy = target.y - game.player.y;
     const length = Math.hypot(dx, dy);
     targets = game.enemies.filter(e => length > 0 && distance(e, game.player) <= spell.range && hasSight(game, game.player, e)
@@ -167,13 +206,17 @@ export function restore(value) {
     const defaults = { damageDealt: 0, pointsEarned: 0, pointsSpent: 0, spellsCast: 0, staffStrikes: 0, potionsUsed: 0, realmsCleared: 0 };
     game.progress = { ...defaults, ...game.progress };
     if (!Object.values(game.progress).every(value => Number.isInteger(value) && value >= 0)) return null;
-    game.components ??= { spark: 0, ember: 0, crystal: 0 };
+    game.components ??= { spark: 0, ember: 0, crystal: 0 }; game.rw3Components ??= []; game.equipment ??= {};
     game.artifacts ??= []; game.artifactCasts ??= 0; game.shrine ??= null;
+    game.bigBangEnabled ??= false;
     if (!materials.every(key => Number.isInteger(game.components[key]) && game.components[key] >= 0)
       || !Array.isArray(game.artifacts) || new Set(game.artifacts).size !== game.artifacts.length
       || !game.artifacts.every(id => artifacts.some(a => a.id === id))
       || !Number.isInteger(game.artifactCasts) || game.artifactCasts < 0
+      || typeof game.bigBangEnabled !== 'boolean' || (game.bigBangEnabled && game.seed !== BIG_BANG_SEED)
       || game.items.some(item => item.type === 'component' && !materials.includes(item.material))
+      || !Array.isArray(game.rw3Components) || !game.rw3Components.every(name => componentByName.has(name))
+      || !Object.values(game.equipment).every(entry => entry && typeof entry.name === 'string' && Array.isArray(entry.components))
       || (game.shrine && (!Number.isInteger(game.shrine.x) || !Number.isInteger(game.shrine.y)
         || game.tiles[game.shrine.y]?.[game.shrine.x] !== 0 || !Number.isInteger(game.shrine.uses) || game.shrine.uses < 0 || game.shrine.uses > 3))) return null;
     return game;
@@ -189,6 +232,14 @@ export function craft(game, id) {
   if (id === 'prism') for (const spell of availableSpells(game)) game.charges[spell.id] += 2;
   if (id === 'storm-bell') game.artifactCasts = 0;
   log(game, `Crafted ${item.name}.`, 'gold'); return true;
+}
+
+// Full compendium equipment: tag recipes consume the selected named components
+// and replace the matching one of the five equipment slots without spending a turn.
+export function forge(game, name, componentNames) {
+  const item = forgeEquipment(game, name, componentNames);
+  if (!item) return false;
+  log(game, `Forged ${item.name} (${item.slot}).`, 'gold'); return true;
 }
 export function transmute(game, from, to) {
   if (game.status !== 'playing' || !game.shrine?.uses || distance(game.player, game.shrine) > 1

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { nodes, nodeMap, schools, paths, spellInfo } from '../src/catalog.js';
-import { createGame, generateRealm, move, cast, wait, drink, learningPlan, learn, restore, serialize, availableSpells, maxHealth, SIZE, hasSight } from '../src/engine.js';
+import { createGame, generateRealm, move, cast, wait, drink, learningPlan, learn, restore, serialize, availableSpells, maxHealth, SIZE, hasSight, shortestPath } from '../src/engine.js';
 function arena() {
   const game = createGame(42);
   game.tiles = Array.from({ length: SIZE }, (_, y) => Array.from({ length: SIZE }, (_, x) => !x || !y || x === SIZE - 1 || y === SIZE - 1 ? 1 : 0));
@@ -12,6 +12,19 @@ function enemy(x, y, extra = {}) { return { id: 1, x, y, name: 'Test enemy', hp:
 test('catalog contains 2304 unique connected skills and 144 spell roots', () => {
   assert.equal(nodes.length, 2304); assert.equal(nodeMap.size, 2304); assert.equal(nodes.filter(n => !n.parent).length, 144);
   for (const node of nodes) { if (node.parent) { const parent = nodeMap.get(node.parent); assert.ok(parent); assert.equal(parent.rank, node.rank - 1); } }
+});
+test('Big Bang is a localhost-only development default for seed 666 and damages every enemy', () => {
+  const disabled = createGame(666);
+  assert.ok(!availableSpells(disabled).some(spell => spell.id === 'dev-big-bang'));
+  const game = createGame(666, { enableBigBang: true });
+  assert.equal(availableSpells(game)[0].damage, 50000);
+  game.tiles = Array.from({ length: SIZE }, (_, y) => Array.from({ length: SIZE }, (_, x) => !x || !y || x === SIZE - 1 || y === SIZE - 1 ? 1 : 0));
+  game.enemies = [enemy(4, 11), enemy(18, 18, { id: 2 })];
+  assert.ok(cast(game, 'dev-big-bang', { x: 3, y: 11 }));
+  assert.equal(game.enemies.length, 0);
+  assert.equal(game.progress.damageDealt, 60);
+  const wrongSeed = createGame(42, { enableBigBang: true });
+  assert.ok(!availableSpells(wrongSeed).some(spell => spell.id === 'dev-big-bang'));
 });
 test('each skill applies a real stat increase and all roots unlock spells', () => {
   for (const school of schools) for (const path of paths) {
@@ -43,6 +56,14 @@ test('skills enforce prerequisites, costs and uniqueness without consuming a tur
 });
 test('line of sight blocks casting through walls', () => {
   const game = arena(); game.tiles[11][5] = 1; assert.equal(hasSight(game, game.player, { x: 7, y: 11 }), false); assert.equal(cast(game, '0-0', { x: 7, y: 11 }), false);
+});
+test('shortestPath finds the minimum cardinal route around walls', () => {
+  const game = arena();
+  game.tiles[11][4] = 1; game.tiles[11][5] = 1;
+  const path = shortestPath(game, game.player, { x: 6, y: 11 });
+  assert.equal(path.length, 5);
+  assert.deepEqual(path.at(-1), { x: 6, y: 11 });
+  assert.equal(shortestPath(game, game.player, { x: 4, y: 11 }), null);
 });
 test('casting consumes charges, harms enemies and advances their turn', () => {
   const game = arena(); game.enemies = [enemy(6, 11)]; assert.ok(cast(game, '0-0', { x: 6, y: 11 })); assert.equal(game.charges['0-0'], 6); assert.equal(game.enemies[0].hp, 21); assert.equal(game.turn, 1); assert.equal(game.enemies[0].x, 5);
