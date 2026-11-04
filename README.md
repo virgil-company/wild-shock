@@ -14,7 +14,7 @@ Open http://localhost:5173. Serve over HTTP; ES modules cannot reliably run by o
 
 ## Gameplay
 
-- 24 seeded procedural realms, two exit choices, and a boss every sixth realm.
+- 100 seeded procedural realms, two exit choices, and a boss every sixth realm.
 - Strict turn-based movement, melee, ranged spells, line of sight, enemy pathfinding, and visible attack intentions.
 - 12 magic schools, 144 unlockable spells, and **2,304 connected skill nodes**: 12 schools × 12 paths × 16 ranks.
 - The atlas is a combinatorial progression system: ranks improve school-wide attributes rather than representing 2,304 bespoke spell behaviors. Area, range, chain, damage, protection, reserves, status duration, vitality, echo damage, leech, and resistance penetration all affect combat.
@@ -40,7 +40,7 @@ Open http://localhost:5173. Serve over HTTP; ES modules cannot reliably run by o
 
 Learning is free of turn cost. Each root unlocks its school/path spell. Later ranks require the previous rank and cost 1–4 skill points. Collect memory shards and clear realms to gain points. You specialize within a journey; the whole atlas is not intended to be purchased in a single run.
 
-Clear every hostile before entering a portal. New realms restore health and spell charges. The upper portal selects Mossbound enemy affinities; the lower selects Emberfall affinities. Complete realm 24 and enter a portal to win.
+Clear every hostile before entering a portal. New realms restore health and spell charges. The upper portal selects Mossbound enemy affinities; the lower selects Emberfall affinities. Complete realm 100 and enter a portal to win.
 
 ## Artifact forge and scouting
 
@@ -78,6 +78,10 @@ npm run build
 
 ## Project structure
 
+- `src/locales/`: one complete translation file per language; see [translation maintenance](src/locales/README.md) for keys, parameters and adding languages.
+- `src/i18n.js`: locale registry, key lookup, interpolation and explicit HTML bindings.
+- `src/game-text.js`: localized catalog labels and descriptions.
+- `src/log-migration.js`: converts saved English log messages to language-neutral events.
 - `src/artifacts.js`: material recipes, artifact definitions and spell bonuses.
 - `src/catalog.js`: deterministic skill catalog and accumulated spell statistics.
 - `src/engine.js`: DOM-independent world generation, actions, AI, progression, and save serialization.

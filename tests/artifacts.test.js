@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { artifacts } from '../src/artifacts.js';
-import { createGame, generateRealm, craft, transmute, availableSpells, cast, move, serialize, restore, previewPortal, threateningEnemies, SIZE } from '../src/engine.js';
+import { createGame, generateRealm, craft, transmute, availableSpells, cast, move, serialize, restore, previewPortal, threateningEnemies, FINAL_REALM, SIZE } from '../src/engine.js';
 function arena() {
   const g = createGame(42);
   g.tiles = Array.from({ length: SIZE }, (_, y) => Array.from({ length: SIZE }, (_, x) => !x || !y || x === SIZE - 1 || y === SIZE - 1 ? 1 : 0));
@@ -71,7 +71,9 @@ test('portal previews match generated destinations and never mutate the active g
     assert.deepEqual(preview.components, next.items.filter(i => i.type === 'component').map(i => i.material));
   }
   assert.notDeepEqual(previewPortal(g, 0).components, previewPortal(g, 1).components);
-  g.realm = 24; assert.equal(previewPortal(g, 0), null);
+  g.realm = 24; assert.ok(previewPortal(g, 0));
+  g.realm = FINAL_REALM - 1; assert.ok(previewPortal(g, 1));
+  g.realm = FINAL_REALM; assert.equal(previewPortal(g, 0), null);
 });
 test('attack zones respect walls, range and next-turn incapacitation', () => {
   const g = arena(); g.enemies = [enemy({ range: 5 })];

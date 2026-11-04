@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { nodes, nodeMap, schools, paths, spellInfo } from '../src/catalog.js';
-import { createGame, generateRealm, move, cast, wait, drink, learningPlan, learn, restore, serialize, availableSpells, maxHealth, SIZE, hasSight, shortestPath } from '../src/engine.js';
+import { createGame, generateRealm, move, cast, wait, drink, learningPlan, learn, restore, serialize, availableSpells, maxHealth, FINAL_REALM, SIZE, hasSight, shortestPath } from '../src/engine.js';
 function arena() {
   const game = createGame(42);
   game.tiles = Array.from({ length: SIZE }, (_, y) => Array.from({ length: SIZE }, (_, x) => !x || !y || x === SIZE - 1 || y === SIZE - 1 ? 1 : 0));
@@ -37,8 +37,8 @@ test('each skill applies a real stat increase and all roots unlock spells', () =
 });
 test('world generation is deterministic and all pickups, enemies and rifts reachable', () => {
   assert.deepEqual(createGame(123).tiles, createGame(123).tiles);
-  for (let seed = 0; seed < 40; seed++) {
-    const game = createGame(seed); game.realm = 1 + seed % 24; generateRealm(game);
+  for (let seed = 0; seed < 100; seed++) {
+    const game = createGame(seed); game.realm = 1 + seed % FINAL_REALM; generateRealm(game);
     const queue = [{ x: game.player.x, y: game.player.y }], seen = new Set([`${game.player.x},${game.player.y}`]);
     for (let i = 0; i < queue.length; i++) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const x = queue[i].x + dx, y = queue[i].y + dy; if (game.tiles[y]?.[x] === 0 && !seen.has(`${x},${y}`)) { seen.add(`${x},${y}`); queue.push({ x, y }); } }
     for (const entity of [...game.items, ...game.enemies, ...game.portals]) assert.ok(seen.has(`${entity.x},${entity.y}`));
@@ -87,7 +87,7 @@ test('progress records skill point spending and migrates older saves', () => {
   assert.deepEqual(restore(JSON.stringify(oldSave)).progress, { damageDealt: 0, pointsEarned: 0, pointsSpent: 0, spellsCast: 0, staffStrikes: 0, potionsUsed: 0, realmsCleared: 0 });
 });
 test('final rift wins and death prevents further actions', () => {
-  const game = arena(); game.realm = 24; game.player.x = 18; game.player.y = 7; move(game, 1, 0); assert.equal(game.status, 'won'); assert.equal(wait(game), false);
+  const game = arena(); game.realm = FINAL_REALM; game.player.x = 18; game.player.y = 7; move(game, 1, 0); assert.equal(game.status, 'won'); assert.equal(wait(game), false);
   const dead = arena(); dead.player.hp = 1; dead.enemies = [enemy(4, 11)]; wait(dead); assert.equal(dead.status, 'dead'); assert.equal(move(dead, 0, 1), false); assert.equal(drink(dead), false);
 });
 test('saves round-trip and malformed data is rejected', () => {
@@ -136,4 +136,27 @@ test('invalid, already learned and ended-game purchases leave state unchanged', 
       assert.equal(learn(game, id), false); assert.equal(serialize(game), before);
     }
   }
+});
+
+test('campaign continues through every new realm and wins only at realm 100', () => {
+  assert.equal(FINAL_REALM, 100);
+  const game = arena(); game.realm = 24;
+  for (let realm = 24; realm <= FINAL_REALM; realm++) {
+    assert.equal(game.realm, realm);
+    assert.ok(restore(serialize(game)));
+    game.enemies = []; game.player.x = 18; game.player.y = 7;
+    assert.ok(move(game, 1, 0));
+    assert.equal(game.status, realm === FINAL_REALM ? 'won' : 'playing');
+  }
+  assert.equal(restore(serialize(game)).status, 'won');
+  assert.equal(restore(JSON.stringify({ ...game, realm: 101 })), null);
+});
+test('completed legacy campaigns can continue beyond realm 24', () => {
+  const game = arena(); game.realm = 24; game.status = 'won'; game.progress.realmsCleared = 24;
+  const resumed = restore(serialize(game));
+  assert.equal(resumed.status, 'playing');
+  resumed.player.x = 18; resumed.player.y = 7;
+  assert.ok(move(resumed, 1, 0));
+  assert.equal(resumed.realm, 25);
+  assert.equal(resumed.progress.realmsCleared, 24);
 });

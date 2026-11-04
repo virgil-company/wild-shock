@@ -1,8 +1,10 @@
+import { namedKey, textRef, enemyNameKey } from './text-keys.js';
+import { migrateLogEntry } from './log-migration.js';
 import { materials, artifacts, hasArtifact, enhanceSpell, canCraft } from './artifacts.js';
 import { schools, nodeMap, getStats, spellInfo } from './catalog.js';
 import { addComponent, forge as forgeEquipment, componentByName } from './rw3.js';
 export const SIZE = 23;
-export const FINAL_REALM = 24;
+export const FINAL_REALM = 100;
 export const BIG_BANG_SEED = 666;
 export const bigBangSpell = Object.freeze({
   id: 'dev-big-bang', name: 'Big Bang', color: '#fff3a1', icon: '✹', damage: 50000,
@@ -11,7 +13,7 @@ export const bigBangSpell = Object.freeze({
 });
 export const distance = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 export function random(seed) { let state = seed >>> 0; return () => { state += 0x6D2B79F5; let n = state; n = Math.imul(n ^ n >>> 15, n | 1); n ^= n + Math.imul(n ^ n >>> 7, n | 61); return ((n ^ n >>> 14) >>> 0) / 4294967296; }; }
-export function log(game, message, tone = '') { game.log.unshift({ message, tone, turn: game.turn }); game.log = game.log.slice(0, 60); }
+export function log(game, key, params = {}, tone = '') { game.log.unshift({ key, params, tone, turn: game.turn }); game.log = game.log.slice(0, 60); }
 export function maxHealth(game) { return 55 + schools.reduce((total, school) => total + getStats(game.learned, school.id).vitality, 0); }
 export function createGame(seed = Date.now() % 2147483647, { enableBigBang = false } = {}) {
   const game = { version: 1, seed, realm: 1, turn: 0, points: 12, learned: ['0-0-1', '1-1-1', '2-2-1'],
@@ -19,7 +21,7 @@ export function createGame(seed = Date.now() % 2147483647, { enableBigBang = fal
     player: { x: 3, y: 11, hp: 55, shield: 0 }, charges: {}, potions: 3, kills: 0, status: 'playing', log: [], effects: [], theme: 0,
     bigBangEnabled: seed === BIG_BANG_SEED && enableBigBang,
     progress: { damageDealt: 0, pointsEarned: 0, pointsSpent: 0, spellsCast: 0, staffStrikes: 0, potionsUsed: 0, realmsCleared: 0 } };
-  generateRealm(game); log(game, 'The rift opens. Your next move is yours.', 'gold'); return game;
+  generateRealm(game); log(game, 'log.start', {}, 'gold'); return game;
 }
 export function availableSpells(game) {
   const spells = game.learned.filter(id => nodeMap.get(id)?.rank === 1).map(id => { const node = nodeMap.get(id); return enhanceSpell(game, spellInfo(node.school, node.path, game.learned)); });
@@ -106,7 +108,7 @@ export function learn(game, id) {
       const spell = enhanceSpell(game, spellInfo(node.school, node.path, game.learned));
       game.charges[spell.id] = spell.maxCharges;
     }
-    log(game, `Learned ${node.name}.`, 'gold');
+    log(game, 'log.learned', { skill: textRef('atlas.nodeName', { spell: textRef(`spells.${node.school}-${node.path}.name`), rank: node.rank }) }, 'gold');
   }
   return true;
 }
@@ -124,9 +126,9 @@ function damagePlayer(game, amount) {
 function cleanup(game) {
   const dead = game.enemies.filter(e => e.hp <= 0); game.kills += dead.length;
   if (game.player.hp > 0 && hasArtifact(game, 'cinderheart')) game.player.hp = Math.min(maxHealth(game), game.player.hp + dead.length * 2);
-  for (const enemy of dead) { log(game, `${enemy.name} falls.`, 'green'); if (enemy.boss) awardPoints(game, 5); }
+  for (const enemy of dead) { log(game, 'log.fall', { enemy: textRef(enemyNameKey(enemy)) }, 'green'); if (enemy.boss) awardPoints(game, 5); }
   game.enemies = game.enemies.filter(e => e.hp > 0);
-  if (dead.length && !game.enemies.length) { awardPoints(game, 6 + Math.floor(game.realm / 3)); log(game, 'Realm cleared. Both rifts are now open. Skill points awarded.', 'gold'); }
+  if (dead.length && !game.enemies.length) { awardPoints(game, 6 + Math.floor(game.realm / 3)); log(game, 'log.cleared', {}, 'gold'); }
 }
 export function endTurn(game) {
   game.turn++;
@@ -135,7 +137,7 @@ export function endTurn(game) {
     if (enemy.hp <= 0) continue;
     if (enemy.statuses.freeze > 0) { enemy.statuses.freeze--; continue; }
     if (enemy.statuses.shock > 0) { enemy.statuses.shock--; if (game.turn % 2 === 0) continue; }
-    if (distance(enemy, game.player) <= enemy.range && hasSight(game, enemy, game.player)) { damagePlayer(game, enemy.damage); log(game, `${enemy.name} hits for ${enemy.damage}.`, 'red'); }
+    if (distance(enemy, game.player) <= enemy.range && hasSight(game, enemy, game.player)) { damagePlayer(game, enemy.damage); log(game, 'log.hit', { enemy: textRef(enemyNameKey(enemy)), damage: enemy.damage }, 'red'); }
     else {
       const moves = [[0, 1], [1, 0], [0, -1], [-1, 0]].map(([dx, dy]) => ({ x: enemy.x + dx, y: enemy.y + dy })).filter(p => game.tiles[p.y]?.[p.x] === 0 && distance(p, game.player) > 0 && !game.enemies.some(other => other !== enemy && other.hp > 0 && distance(other, p) === 0));
       // Breadth-first pathfinding avoids enemies getting stuck behind corners.
@@ -149,20 +151,20 @@ export function endTurn(game) {
     if (game.player.hp <= 0) break;
   }
   cleanup(game);
-  if (game.player.hp <= 0) { game.status = 'dead'; log(game, 'Your light fades. A new journey awaits.', 'red'); }
+  if (game.player.hp <= 0) { game.status = 'dead'; log(game, 'log.dead', {}, 'red'); }
 }
 export function move(game, dx, dy) {
   if (game.status !== 'playing' || Math.abs(dx) + Math.abs(dy) !== 1) return false;
   const p = { x: game.player.x + dx, y: game.player.y + dy };
   if (game.tiles[p.y]?.[p.x] !== 0) return false;
   const enemy = game.enemies.find(e => distance(e, p) === 0);
-  if (enemy) { damageEnemy(game, enemy, 5 + Math.floor(game.realm / 3)); game.progress.staffStrikes++; game.effects = [{ ...p, color: '#ded6b7' }]; log(game, 'Your staff strikes.'); cleanup(game); }
+  if (enemy) { damageEnemy(game, enemy, 5 + Math.floor(game.realm / 3)); game.progress.staffStrikes++; game.effects = [{ ...p, color: '#ded6b7' }]; log(game, 'log.staff'); cleanup(game); }
   else {
     Object.assign(game.player, p);
     const item = game.items.find(i => distance(i, p) === 0);
-    if (item) { if (item.type === 'component') { game.components[item.material]++; log(game, `Collected ${item.material}.`, 'gold'); } else if (item.type === 'rw3-component') { addComponent(game, item.name); log(game, `Collected ${item.name}.`, 'gold'); } else if (item.type === 'shard') { awardPoints(game, 3); log(game, 'Memory shard: +3 skill points.', 'gold'); } else { game.potions++; log(game, 'Restoration draught collected.', 'green'); } game.items = game.items.filter(i => i !== item); }
+    if (item) { if (item.type === 'component') { game.components[item.material]++; log(game, 'log.collected', { item: textRef(`materials.${item.material}`) }, 'gold'); } else if (item.type === 'rw3-component') { addComponent(game, item.name); log(game, 'log.collected', { item: textRef(namedKey('components', item.name)) }, 'gold'); } else if (item.type === 'shard') { awardPoints(game, 3); log(game, 'log.shard', {}, 'gold'); } else { game.potions++; log(game, 'log.potion', {}, 'green'); } game.items = game.items.filter(i => i !== item); }
     const portal = game.portals.find(r => distance(r, p) === 0);
-    if (portal && !game.enemies.length) { game.progress.realmsCleared++; if (game.realm === FINAL_REALM) { game.status = 'won'; log(game, 'The final rift is sealed. You are the Wild Sovereign.', 'gold'); return true; } game.realm++; game.theme = portal.theme; game.player.hp = maxHealth(game); generateRealm(game); log(game, `Entered realm ${game.realm}. Health and spell charges restored.`, 'gold'); return true; }
+    if (portal && !game.enemies.length) { game.progress.realmsCleared++; if (game.realm === FINAL_REALM) { game.status = 'won'; log(game, 'log.won', {}, 'gold'); return true; } game.realm++; game.theme = portal.theme; game.player.hp = maxHealth(game); generateRealm(game); log(game, 'log.entered', { realm: game.realm }, 'gold'); return true; }
   }
   endTurn(game); return true;
 }
@@ -191,15 +193,15 @@ export function cast(game, spellId, target) {
   game.artifactCasts++;
   if (hasArtifact(game, 'storm-bell') && game.artifactCasts % 3 === 0) {
     for (const enemy of game.enemies) if (enemy.hp > 0 && distance(game.player, enemy) <= 4 && hasSight(game, game.player, enemy)) { damageEnemy(game, enemy, 5); game.effects.push({ x: enemy.x, y: enemy.y, color: '#d4cc79' }); }
-    log(game, 'The Storm Bell rings.', 'gold');
+    log(game, 'log.bell', {}, 'gold');
   }
   if (spell.effect === 'heal' || spell.path === 8) game.player.hp = Math.min(maxHealth(game), game.player.hp + 5 + spell.stats.vitality);
   if (spell.effect === 'shield' || spell.path === 4) game.player.shield += 4 + spell.stats.armor;
-  game.effects.push({ ...target, color: spell.color }); log(game, `${spell.name} strikes ${targets.length} target${targets.length === 1 ? '' : 's'}.`);
+  game.effects.push({ ...target, color: spell.color }); log(game, targets.length === 1 ? 'log.cast.one' : 'log.cast.other', { spell: textRef(`spells.${spell.id}.name`), count: targets.length });
   cleanup(game); endTurn(game); return true;
 }
-export function wait(game) { if (game.status !== 'playing') return false; log(game, 'You wait.'); endTurn(game); return true; }
-export function drink(game) { if (game.status !== 'playing' || !game.potions) return false; game.potions--; game.progress.potionsUsed++; game.player.hp = maxHealth(game); for (const spell of availableSpells(game)) game.charges[spell.id] = spell.maxCharges; log(game, 'Restored health and all spell charges.', 'green'); endTurn(game); return true; }
+export function wait(game) { if (game.status !== 'playing') return false; log(game, 'log.wait'); endTurn(game); return true; }
+export function drink(game) { if (game.status !== 'playing' || !game.potions) return false; game.potions--; game.progress.potionsUsed++; game.player.hp = maxHealth(game); for (const spell of availableSpells(game)) game.charges[spell.id] = spell.maxCharges; log(game, 'log.restored', {}, 'green'); endTurn(game); return true; }
 export function serialize(game) { return JSON.stringify(game); }
 export function restore(value) {
   try { const game = JSON.parse(value); if (game.version !== 1 || !Number.isInteger(game.seed) || !Number.isInteger(game.realm) || game.realm < 1 || game.realm > FINAL_REALM || !Array.isArray(game.learned) || !game.learned.every(id => nodeMap.has(id)) || new Set(game.learned).size !== game.learned.length || !['playing', 'dead', 'won'].includes(game.status) || !Array.isArray(game.tiles) || game.tiles.length !== SIZE || !game.tiles.every(row => Array.isArray(row) && row.length === SIZE && row.every(t => t === 0 || t === 1)) || !Number.isFinite(game.player?.hp) || !Number.isInteger(game.player.x) || !Number.isInteger(game.player.y) || game.tiles[game.player.y]?.[game.player.x] !== 0 || !Array.isArray(game.enemies) || !Array.isArray(game.items) || !Array.isArray(game.portals) || !Array.isArray(game.log) || !game.charges || !Number.isFinite(game.points)) return null;
@@ -219,6 +221,13 @@ export function restore(value) {
       || !Object.values(game.equipment).every(entry => entry && typeof entry.name === 'string' && Array.isArray(entry.components))
       || (game.shrine && (!Number.isInteger(game.shrine.x) || !Number.isInteger(game.shrine.y)
         || game.tiles[game.shrine.y]?.[game.shrine.x] !== 0 || !Number.isInteger(game.shrine.uses) || game.shrine.uses < 0 || game.shrine.uses > 3))) return null;
+    // Reopen completed campaigns from the original 24-realm release.
+    if (game.status === 'won' && game.realm === 24) {
+      game.status = 'playing';
+      game.progress.realmsCleared = Math.max(0, game.progress.realmsCleared - 1);
+      log(game, 'log.expanded', {}, 'gold');
+    }
+    game.log = game.log.map(migrateLogEntry);
     return game;
   } catch { return null; }
 }
@@ -231,7 +240,7 @@ export function craft(game, id) {
   game.artifacts.push(id);
   if (id === 'prism') for (const spell of availableSpells(game)) game.charges[spell.id] += 2;
   if (id === 'storm-bell') game.artifactCasts = 0;
-  log(game, `Crafted ${item.name}.`, 'gold'); return true;
+  log(game, 'log.crafted', { item: textRef(`artifacts.${item.id}.name`) }, 'gold'); return true;
 }
 
 // Full compendium equipment: tag recipes consume the selected named components
@@ -239,13 +248,13 @@ export function craft(game, id) {
 export function forge(game, name, componentNames) {
   const item = forgeEquipment(game, name, componentNames);
   if (!item) return false;
-  log(game, `Forged ${item.name} (${item.slot}).`, 'gold'); return true;
+  log(game, 'log.forged', { item: textRef(namedKey('equipment', item.name)), slot: textRef(`slots.${item.slot.toLowerCase()}`) }, 'gold'); return true;
 }
 export function transmute(game, from, to) {
   if (game.status !== 'playing' || !game.shrine?.uses || distance(game.player, game.shrine) > 1
     || !materials.includes(from) || !materials.includes(to) || from === to || !game.components[from]) return false;
   game.components[from]--; game.components[to]++; game.shrine.uses--;
-  log(game, `Transmuted ${from} into ${to}.`, 'gold'); endTurn(game); return true;
+  log(game, 'log.transmuted', { from: textRef(`materials.${from}`), to: textRef(`materials.${to}`) }, 'gold'); endTurn(game); return true;
 }
 export function threateningEnemies(game, target) {
   return game.enemies.filter(e => e.hp > 0 && !e.statuses.freeze && !(e.statuses.shock > 0 && (game.turn + 1) % 2 === 0)

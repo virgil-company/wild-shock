@@ -1,9 +1,54 @@
-const dict = {
-  'pt-BR': {'The realm':'O reino','Skill atlas':'Atlas de habilidades','Field guide':'Guia de campo','Saved locally':'Salvo localmente','Save unavailable':'Salvamento indisponível','New journey ↗':'Nova jornada ↗','THE WAYFARER':'O VIAJANTE','The Riftwalker':'O Andarilho das Fendas','VITALITY':'VITALIDADE','WARD':'PROTEÇÃO','SKILL POINTS':'PONTOS DE HABILIDADE','Open the skill atlas':'Abrir o atlas de habilidades','YOUR GRIMOIRE':'SEU GRIMÓRIO','Restoration draught':'Poção de restauração','YOUR OBJECTIVE':'SEU OBJETIVO','Silence the realm.':'Silencie o reino.','Defeat its inhabitants.':'Derrote seus habitantes.','Choose a rift. Go deeper.':'Escolha uma fenda. Vá mais fundo.','HOSTILES':'HOSTIS','REMAINING':'RESTANTES','INSPECT':'INSPECIONAR','Know your enemy.':'Conheça seu inimigo.','THE CHRONICLE':'A CRÔNICA','Wait a turn':'Esperar um turno','THE SKILL ATLAS':'O ATLAS DE HABILIDADES','Build your own kind of impossible.':'Construa seu próprio impossível.','All skills':'Todas','Available to learn':'Disponíveis para aprender','Learned skills':'Aprendidas','Learned':'Aprendida','Available':'Disponível','Every turn is a choice.':'Cada turno é uma escolha.','A SPELLCRAFT ROGUELIKE':'UM ROGUELIKE DE MAGIA','FIELD GUIDE':'GUIA DE CAMPO','A NEW BEGINNING':'UM NOVO COMEÇO','Step into another rift?':'Entrar em outra fenda?','Keep exploring':'Continuar explorando','Begin journey ↗':'Começar jornada ↗','World seed (optional)':'Semente do mundo (opcional)','Random world':'Mundo aleatório','TURN':'TURNO','THE MOSSBOUND RUINS':'AS RUÍNAS MUSGOSAS','THE EMBERFALL SANCTUM':'O SANTUÁRIO DE EMBERFALL','Rifts sealed until the realm is clear':'Fendas seladas até limpar o reino','Rifts open. Walk into either portal.':'Fendas abertas. Entre em qualquer portal.','Power has many branches.':'O poder tem muitos ramos.'},
-  es: {'The realm':'El reino','Skill atlas':'Atlas de habilidades','Field guide':'Guía de campo','Saved locally':'Guardado localmente','Save unavailable':'Guardado no disponible','New journey ↗':'Nuevo viaje ↗','THE WAYFARER':'EL VIAJERO','The Riftwalker':'El Caminante de Grietas','VITALITY':'VITALIDAD','WARD':'BARRERA','SKILL POINTS':'PUNTOS DE HABILIDAD','Open the skill atlas':'Abrir el atlas de habilidades','YOUR GRIMOIRE':'TU GRIMORIO','Restoration draught':'Poción de restauración','YOUR OBJECTIVE':'TU OBJETIVO','Silence the realm.':'Silencia el reino.','Defeat its inhabitants.':'Derrota a sus habitantes.','Choose a rift. Go deeper.':'Elige una grieta. Adéntrate.','HOSTILES':'HOSTILES','REMAINING':'RESTANTES','INSPECT':'INSPECCIONAR','Know your enemy.':'Conoce a tu enemigo.','THE CHRONICLE':'LA CRÓNICA','Wait a turn':'Esperar un turno','THE SKILL ATLAS':'EL ATLAS DE HABILIDADES','Build your own kind of impossible.':'Construye tu propio imposible.','All skills':'Todas','Available to learn':'Disponibles','Learned skills':'Aprendidas','Learned':'Aprendida','Available':'Disponible','Every turn is a choice.':'Cada turno es una elección.','A SPELLCRAFT ROGUELIKE':'UN ROGUELIKE DE MAGIA','FIELD GUIDE':'GUÍA DE CAMPO','A NEW BEGINNING':'UN NUEVO COMIENZO','Step into another rift?':'¿Entrar en otra grieta?','Keep exploring':'Seguir explorando','Begin journey ↗':'Comenzar viaje ↗','World seed (optional)':'Semilla del mundo (opcional)','Random world':'Mundo aleatorio','TURN':'TURNO','THE MOSSBOUND RUINS':'LAS RUINAS MUSGOSAS','THE EMBERFALL SANCTUM':'EL SANTUARIO DE EMBERFALL','Rifts sealed until the realm is clear':'Grietas selladas hasta limpiar el reino','Rifts open. Entra en cualquier portal.':'Grietas abiertas. Entra en cualquier portal.','Power has many branches.':'El poder tiene muchas ramas.'}
+import en from './locales/en.js';
+import ptBR from './locales/pt-BR.js';
+import es from './locales/es.js';
+
+// Register a complete locale file here to make it available in the menu.
+const registry = {
+  en: { label: 'EN', messages: en },
+  'pt-BR': { label: 'PT-BR', messages: ptBR },
+  es: { label: 'ES', messages: es },
 };
-let locale = localStorage.getItem('wild-shock-locale') || 'en';
-export const t = value => dict[locale]?.[value] || value;
+export const locales = Object.fromEntries(Object.entries(registry).map(([value, { messages }]) => [value, messages]));
+export const localeOptions = Object.entries(registry).map(([value, { label }]) => ({ value, label }));
+const normalizeLocale = value => Object.hasOwn(locales, value) ? value : 'en';
+let locale = 'en';
+try { locale = normalizeLocale(globalThis.window?.localStorage?.getItem('wild-shock-locale')); } catch { /* Storage may be disabled. */ }
 export const getLocale = () => locale;
-export function setLocale(value) { locale = value; localStorage.setItem('wild-shock-locale', value); location.reload(); }
-export function translatePage() { document.documentElement.lang = locale; const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT); const text = []; while (walker.nextNode()) text.push(walker.currentNode); text.forEach(n => { const v = n.nodeValue.trim(); if (v && t(v) !== v) n.nodeValue = n.nodeValue.replace(v, t(v)); }); }
+
+// Parameters can contain translation references so saved events stay language neutral.
+export function t(key, params = {}) {
+  const template = locales[locale][key] ?? en[key] ?? key;
+  return template.replace(/\{(\w+)\}/g, (placeholder, name) => {
+    if (!Object.hasOwn(params, name)) return placeholder;
+    const value = params[name];
+    return value && typeof value === 'object' && typeof value.key === 'string'
+      ? t(value.key, value.params)
+      : String(value);
+  });
+}
+export function setLocale(value) {
+  locale = normalizeLocale(value);
+  try { globalThis.window?.localStorage?.setItem('wild-shock-locale', locale); } catch { /* Switching works without storage. */ }
+  if (typeof document !== 'undefined') {
+    translatePage();
+    document.dispatchEvent(new Event('localechange'));
+  }
+}
+
+const translatedAttributes = { 'aria-label': 'aria-label', tooltip: 'data-tooltip', placeholder: 'placeholder', title: 'title', alt: 'alt', content: 'content' };
+// Only elements explicitly marked with keys are translated. Text, HTML, CSS and
+// game identifiers are never searched or rewritten to guess a translation.
+export function translatePage(root = document) {
+  document.documentElement.lang = locale;
+  for (const element of root.querySelectorAll('[data-i18n]')) {
+    element.textContent = t(element.dataset.i18n);
+  }
+  for (const [name, attribute] of Object.entries(translatedAttributes)) {
+    const marker = `data-i18n-${name}`;
+    for (const element of root.querySelectorAll(`[${marker}]`)) {
+      element.setAttribute(attribute, t(element.getAttribute(marker)));
+    }
+  }
+  const language = document.getElementById('language-select');
+  if (language) language.value = locale;
+}
