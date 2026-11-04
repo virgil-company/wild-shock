@@ -24,15 +24,31 @@ document.addEventListener('localechange', () => {
 });
 const sprites = {
   wizard: ['....aa....','...aaaa...','..aaaaaa..','...bbbb...','...bccb...','...bbbb...','..aaaaaa..','.aaaaaaaa.','.aa.aa.aa.','...a..a...'],
-  imp: ['.a....a.','.aa..aa.','..aaaa..','.abc cba.'.replaceAll(' ', ''),'..aaaa..','...aa...','..aaaa..','.aa..aa.'],
-  knight: ['..aaaa..','.aaaaaa.','.abbbba.','.abccba.','..aaaa..','.aaaaaa.','a.aaaa.a','..a..a..','.aa..aa.'],
-  eye: ['...aa...','..aaaa..','.abbbba.','abbcc bba'.replaceAll(' ', ''),'.abbbba.','..aaaa..','..a..a..','.a....a.'],
-  moth: ['aa....aa','aaa..aaa','.aaaaaa.','..bccb..','.aaaaaa.','aaa..aaa','aa....aa'],
+  imp: ['a......a','aa....aa','.aaaaaa.','.ab..ba.','..aaaa..','a.aaaa.a','.aaaaaa.','..a..a..','.aa..aa.'],
+  knight: ['...aa...','..aaaa..','..abba..','..abba..','...aa...','c.aaa.ac','caaaaaac','c.aaa..c','..a.a...','.aa.aa..'],
+  eye: ['...a....','.a.a.a..','..aaaa..','.abbbba.','abbcc bba'.replaceAll(' ', ''),'.abbbba.','..aaaa..','.a.a.a..','...a....'],
+  moth: ['a......a','.a....a.','aa.ab.aa','aaaabaaa','aaaabaaa','.aaabaa.','aa..b.aa','a...b..a'],
+  spark: ['.....aa.','....aa..','...aa...','..aaaaaa','....aaa.','...aa...','..aa....','.aa.....'],
+  ember: ['....a...','...aa...','...aaa..','.a.aaa..','.aaaaaa.','aaabbaaa','aabbbbaa','.aabbaa.','..aaaa..'],
+  crystal: ['...aa...','..abba..','.abbbba.','abbbbbba','aabbbbaa','.aabbaa.','..aaaa..','...aa...'],
+  shard: ['....a...','...aba..','..abbba.','.abbbba.','..abba..','..aba...','..aa....','..a.....'],
+  potion: ['..aaaa..','...bb...','..abba..','..abba..','.acccca.','.acccca.','.acccca.','..aaaa..'],
+  component: ['...aa...','..abba..','.abbbba.','abcaacba','abc..cba','.abbbba.','..abba..','...aa...'],
 };
 function sprite(pattern, x, y, colors, scale = 2) {
   const width = Math.max(...pattern.map(row => row.length));
   const ox = x * tile + (tile - width * scale) / 2, oy = y * tile + (tile - pattern.length * scale) / 2;
   pattern.forEach((row, py) => [...row].forEach((pixel, px) => { if (colors[pixel]) { ctx.fillStyle = colors[pixel]; ctx.fillRect(ox + px * scale, oy + py * scale, scale, scale); } }));
+}
+function itemVisual(item) {
+  const key = item.type === 'component' ? item.material : item.type === 'rw3-component' ? 'component' : item.type;
+  const color = { spark: '#f4dc79', ember: '#f49a61', crystal: '#8fd8ee', shard: '#ead99a', potion: '#d8d5c3', component: '#d7a6e8' }[key];
+  return { key, colors: { a: color, b: key === 'potion' ? '#f5ead0' : '#fff0c4', c: key === 'potion' ? '#ed7187' : '#9272ac' } };
+}
+function spriteIcon(key, colors) {
+  const pattern = sprites[key];
+  const pixels = pattern.flatMap((row, y) => [...row].flatMap((pixel, x) => colors[pixel] ? [`<rect x="${x}" y="${y}" width="1" height="1" fill="${colors[pixel]}"/>`] : [])).join('');
+  return `<svg width="32" height="32" viewBox="0 0 ${Math.max(...pattern.map(row => row.length))} ${pattern.length}" shape-rendering="crispEdges" aria-hidden="true">${pixels}</svg>`;
 }
 function draw() {
   ctx.fillStyle = '#101b16'; ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -67,12 +83,8 @@ function draw() {
     ctx.fillStyle = '#b3c99b'; ctx.fillRect(cx - 1, cy - 3, 2, 6);
   }
   for (const item of game.items) {
-    const cx = item.x * tile + 16, cy = item.y * tile + 16;
-    ctx.fillStyle = item.type === 'shard' ? '#dad29c' : '#ad9bbd';
-    if (item.type === 'component') { ctx.fillStyle = { spark: '#d4cc79', ember: '#ee9270', crystal: '#8fc9dd' }[item.material]; ctx.font = 'bold 18px monospace'; ctx.fillText({ spark: 'S', ember: 'E', crystal: 'C' }[item.material], cx - 6, cy + 6); }
-    else if (item.type === 'rw3-component') { ctx.fillStyle = '#d7a6e8'; ctx.font = 'bold 16px monospace'; ctx.fillText('◇', cx - 6, cy + 6); }
-    else if (item.type === 'shard') { ctx.beginPath(); ctx.moveTo(cx, cy - 7); ctx.lineTo(cx + 5, cy); ctx.lineTo(cx, cy + 7); ctx.lineTo(cx - 5, cy); ctx.closePath(); ctx.fill(); }
-    else { ctx.fillRect(cx - 4, cy - 3, 8, 10); ctx.fillRect(cx - 2, cy - 7, 4, 4); }
+    const visual = itemVisual(item);
+    sprite(sprites[visual.key], item.x, item.y, visual.colors);
   }
   for (const enemy of game.enemies) {
     const colors = ['#c48b69', '#a9ae8b', '#ba9dbd', '#a6bb83'];
@@ -160,7 +172,7 @@ function inspect(p) {
   const enemy = p && game.enemies.find(e => distance(e, p) === 0);
   if (enemy) {
     const nextAction = enemy.statuses.freeze ? 'inspection.frozen' : distance(enemy, game.player) <= enemy.range && hasSight(game, enemy, game.player) ? 'inspection.attack' : 'inspection.approach';
-    $('inspection').innerHTML = `<div class="inspect-symbol" style="color:${schools[enemy.school].color}">${schools[enemy.school].icon}</div><h3>${escapeHtml(enemyName(enemy))}</h3><p>${h('inspection.enemyStats', enemy)}<br>${h('inspection.resistance', { school: schoolName(enemy.school) })}<br><span style="color:var(--gold)">${h(nextAction)}</span></p>`;
+    $('inspection').innerHTML = `<div class="inspect-symbol" style="color:${schools[enemy.school].color}">${spriteIcon(['imp', 'knight', 'eye', 'moth'][enemy.type], { a: enemy.boss ? '#dcba76' : '#c5ad91', b: '#4b493c', c: '#f4dca5' })}</div><h3>${escapeHtml(enemyName(enemy))}</h3><p>${h('inspection.enemyStats', enemy)}<br>${h('inspection.resistance', { school: schoolName(enemy.school) })}<br><span style="color:var(--gold)">${h(nextAction)}</span></p>`;
   } else if (p && game.portals.some(r => distance(r, p) === 0)) {
     const portal = game.portals.find(r => distance(r, p) === 0), next = previewPortal(game, portal.theme);
     const preview = next ? [
@@ -174,7 +186,9 @@ function inspect(p) {
     $('inspection').innerHTML = `<div class="inspect-symbol">⚒</div><h3>${h('inspection.shrine')}</h3><p>${h('inspection.shrineDescription', { uses: game.shrine.uses })}</p>`;
   } else if (p && game.items.some(i => distance(i, p) === 0)) {
     const item = game.items.find(i => distance(i, p) === 0);
-    $('inspection').textContent = item.type === 'component' ? t('inspection.material', { material: t(`materials.${item.material}`) }) : item.type === 'rw3-component' ? t('inspection.component', { name: componentName(item.name) }) : t(item.type === 'shard' ? 'inspection.shard' : 'inspection.potion');
+    const description = item.type === 'component' ? t('inspection.material', { material: t(`materials.${item.material}`) }) : item.type === 'rw3-component' ? t('inspection.component', { name: componentName(item.name) }) : t(item.type === 'shard' ? 'inspection.shard' : 'inspection.potion');
+    const visual = itemVisual(item);
+    $('inspection').innerHTML = `<div class="inspect-symbol">${spriteIcon(visual.key, visual.colors)}</div><p>${escapeHtml(description)}</p>`;
   } else if (p && distance(game.player, p) === 0) {
     $('inspection').innerHTML = `<div class="inspect-symbol">✧</div><h3>${h('inspection.player')}</h3><p>${h('inspection.playerHealth', { hp: game.player.hp, maxHp: maxHealth(game), ward: game.player.shield })}<br>${h('inspection.playerResources', { points: game.points, potions: game.potions })}</p>`;
   } else {
