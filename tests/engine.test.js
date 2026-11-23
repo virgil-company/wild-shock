@@ -18,18 +18,23 @@ test('only RW3 spells are available in the grimoire (old Skill Atlas removed)', 
   assert.deepEqual(spells.map(s => s.id), ['rw3-101', 'rw3-61', 'rw3-95']);
 });
 
-test('Big Bang is a localhost-only development default for seed 666 and damages every enemy', () => {
-  const disabled = createGame(666);
-  assert.ok(!availableSpells(disabled).some(spell => spell.id === 'dev-big-bang'));
-  const game = createGame(666, { enableBigBang: true });
-  assert.equal(availableSpells(game)[0].damage, 50000);
-  game.tiles = Array.from({ length: SIZE }, (_, y) => Array.from({ length: SIZE }, (_, x) => !x || !y || x === SIZE - 1 || y === SIZE - 1 ? 1 : 0));
-  game.enemies = [enemy(4, 11), enemy(18, 18, { id: 2 })];
-  assert.ok(cast(game, 'dev-big-bang', { x: 3, y: 11 }));
-  assert.equal(game.enemies.length, 0);
-  assert.equal(game.progress.damageDealt, 60);
-  const wrongSeed = createGame(42, { enableBigBang: true });
-  assert.ok(!availableSpells(wrongSeed).some(spell => spell.id === 'dev-big-bang'));
+test('seed 666 uses the standard grimoire even when restoring an old development save', () => {
+  const game = createGame(666);
+  const starterSpells = availableSpells(createGame(42));
+  assert.deepEqual(availableSpells(game), starterSpells);
+
+  game.bigBangEnabled = true;
+  game.charges['dev-big-bang'] = 1;
+  game.spellBoosts['dev-big-bang'] = { damage: 3 };
+  game.log.unshift({ key: 'log.cast.one', params: { spell: { key: 'spells.dev-big-bang.name' }, count: 1 }, turn: 1 });
+  const restored = restore(serialize(game));
+  assert.deepEqual(availableSpells(restored), starterSpells);
+  assert.equal(cast(restored, 'dev-big-bang', restored.player), false);
+  assert.equal(restored.turn, game.turn);
+  assert.equal(restored.log[0].params.spell, 'Big Bang');
+  assert.ok(!Object.hasOwn(restored, 'bigBangEnabled'));
+  assert.ok(!Object.hasOwn(restored.charges, 'dev-big-bang'));
+  assert.ok(!Object.hasOwn(restored.spellBoosts, 'dev-big-bang'));
 });
 
 test('world generation is deterministic and all pickups, enemies and rifts reachable', () => {

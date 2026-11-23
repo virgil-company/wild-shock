@@ -20,8 +20,11 @@ for (const item of rw3Components) refs.set(item.name, textRef(namedKey('componen
 for (const item of rw3Equipment) refs.set(item.name, textRef(namedKey('equipment', item.name)));
 for (const item of artifacts) refs.set(item.name, textRef(`artifacts.${item.id}.name`));
 for (const [key, value] of Object.entries(en)) if (/^(materials|slots|enemies)\./.test(key)) refs.set(value, textRef(key));
-refs.set('Big Bang', textRef('spells.dev-big-bang.name'));
+
 export function migrateLogEntry(entry) {
+  if (entry.params?.spell?.key === 'spells.dev-big-bang.name') {
+    return { ...entry, params: { ...entry.params, spell: 'Big Bang' } };
+  }
   if (entry.key || typeof entry.message !== 'string') return entry;
   for (const { key, names, pattern } of legacyPatterns) {
     const match = entry.message.match(pattern);

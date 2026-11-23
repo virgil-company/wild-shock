@@ -1,4 +1,4 @@
-import { schoolName, spellName, enemyName, componentName, equipmentName, logText } from './game-text.js';
+import { schoolName, enemyName, componentName, equipmentName, logText } from './game-text.js';
 import { t, getLocale, setLocale, translatePage, localeOptions } from './i18n.js';
 import {
   forge, useShrine, threateningEnemies, previewPortal, SIZE,
@@ -11,15 +11,19 @@ import {
   effectiveRw3Spell, findMatchingComponents, craftableEquipment, getEquipmentModifiers,
   getUnitResistance, DAMAGE_TYPES, TAG_META, CLOUD_TYPES,
 } from './rw3.js';
+import {
+  wizardPortraitSvg, tagIconSvg, slotIconSvg, shrineIconSvg, entityIconSvg, uiIconSvg,
+  drawDungeonTile, drawCanvasCloud, drawCanvasPortal, drawCanvasShrine, drawCanvasItem,
+  drawCanvasWizard, drawCanvasAlly, drawCanvasEnemy, drawCanvasEffect,
+} from './assets.js';
 
 const $ = id => document.getElementById(id);
 const escapeHtml = value => String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 const h = (key, params) => escapeHtml(t(key, params));
 const SAVE_KEY = 'wild-shock-v1';
-const isLocalDevelopment = ['localhost', '127.0.0.1', '[::1]', '::1'].includes(window.location.hostname);
 let storageAvailable = true, saved;
 try { saved = localStorage.getItem(SAVE_KEY); } catch { storageAvailable = false; }
-let game = restore(saved) || createGame(undefined, { enableBigBang: isLocalDevelopment });
+let game = restore(saved) || createGame();
 let detailRw3SpellId = null, inspectionTarget = null;
 let selected = null, hover = null, view = 'realm', showThreats = false;
 
@@ -33,122 +37,164 @@ document.addEventListener('localechange', () => {
   if ($('detail-dialog').open && detailRw3SpellId != null) showRw3SpellDetail(detailRw3SpellId);
 });
 
-const sprites = {
-  wizard: ['....aa....','...aaaa...','..aaaaaa..','...bbbb...','...bccb...','...bbbb...','..aaaaaa..','.aaaaaaaa.','.aa.aa.aa.','...a..a...'],
-  imp: ['a......a','aa....aa','.aaaaaa.','.ab..ba.','..aaaa..','a.aaaa.a','.aaaaaa.','..a..a..','.aa..aa.'],
-  knight: ['...aa...','..aaaa..','..abba..','..abba..','...aa...','c.aaa.ac','caaaaaac','c.aaa..c','..a.a...','.aa..aa..'],
-  eye: ['...a....','.a.a.a..','..aaaa..','.abbbba.','abbccbba','.abbbba.','..aaaa..','.a.a.a..','...a....'],
-  moth: ['a......a','.a....a.','aa.ab.aa','aaaabaaa','aaaabaaa','.aaabaa.','aa..b.aa','a...b..a'],
-  lair: ['..aaaa..','.abbbba.','abccccba','abc..cba','abc..cba','abccccba','.abbbba.','..aaaa..'],
-  ally: ['...aa...','..abba..','.abbbba.','..aaaa..','.aaaaaa.','..a..a..','.aa..aa.'],
-  spark: ['.....aa.','....aa..','...aa...','..aaaaaa','....aaa.','...aa...','..aa....','.aa.....'],
-  ember: ['....a...','...aa...','...aaa..','.a.aaa..','.aaaaaa.','aaabbaaa','aabbbbaa','.aabbaa.','..aaaa..'],
-  crystal: ['...aa...','..abba..','.abbbba.','abbbbbba','aabbbbaa','.aabbaa.','..aaaa..','...aa...'],
-  shard: ['....a...','...aba..','..abbba.','.abbbba.','..abba..','..aba...','..aa....','..a.....'],
-  potion: ['..aaaa..','...bb...','..abba..','..abba..','.acccca.','.acccca.','.acccca.','..aaaa..'],
-  component: ['...aa...','..abba..','.abbbba.','abcaacba','abc..cba','.abbbba.','..abba..','...aa...'],
-};
-const SHRINE_ICONS = { transmutation: '⚒', duplication: '❖', empowerment: '✦', chronomancy: '◷', calling: '♙' };
+// Hydrate handcrafted SVG icons across static chrome slots
+function initStaticIcons() {
+  if ($('brand-mark-icon')) $('brand-mark-icon').innerHTML = uiIconSvg('brand', 34);
+  if ($('wizard-portrait')) $('wizard-portrait').innerHTML = wizardPortraitSvg();
+  if ($('icon-vitality')) $('icon-vitality').innerHTML = uiIconSvg('heart', 14);
+  if ($('icon-shields')) $('icon-shields').innerHTML = uiIconSvg('shield', 13);
+  if ($('icon-ward')) $('icon-ward').innerHTML = uiIconSvg('ward', 13);
+  if ($('icon-sp')) $('icon-sp').innerHTML = uiIconSvg('sp', 13);
+  if ($('icon-potion')) $('icon-potion').innerHTML = entityIconSvg('potion', 28);
+  if ($('icon-threat')) $('icon-threat').innerHTML = uiIconSvg('threat', 15);
+  if ($('icon-wait')) $('icon-wait').innerHTML = uiIconSvg('wait', 15);
+  if ($('icon-skull')) $('icon-skull').innerHTML = uiIconSvg('skull', 32);
+}
 
-function sprite(pattern, x, y, colors, scale = 2) {
-  const width = Math.max(...pattern.map(row => row.length));
-  const ox = x * tile + (tile - width * scale) / 2, oy = y * tile + (tile - pattern.length * scale) / 2;
-  pattern.forEach((row, py) => [...row].forEach((pixel, px) => { if (colors[pixel]) { ctx.fillStyle = colors[pixel]; ctx.fillRect(ox + px * scale, oy + py * scale, scale, scale); } }));
-}
-function itemVisual(item) {
-  const key = item.type === 'component' ? item.material : item.type === 'rw3-component' ? 'component' : item.type;
-  const color = { spark: '#f4dc79', ember: '#f49a61', crystal: '#8fd8ee', shard: '#ead99a', potion: '#d8d5c3', component: '#d7a6e8' }[key];
-  return { key, colors: { a: color, b: key === 'potion' ? '#f5ead0' : '#fff0c4', c: key === 'potion' ? '#ed7187' : '#9272ac' } };
-}
-function spriteIcon(key, colors) {
-  const pattern = sprites[key];
-  const pixels = pattern.flatMap((row, y) => [...row].flatMap((pixel, x) => colors[pixel] ? [`<rect x="${x}" y="${y}" width="1" height="1" fill="${colors[pixel]}"/>`] : [])).join('');
-  return `<svg width="32" height="32" viewBox="0 0 ${Math.max(...pattern.map(row => row.length))} ${pattern.length}" shape-rendering="crispEdges" aria-hidden="true">${pixels}</svg>`;
-}
 function cleanRw3Desc(text) {
   return String(text || '').replace(/\[([^:\]]+)(?::[^\]]+)?\]/g, '$1');
 }
 
-function draw() {
-  ctx.fillStyle = '#0a110e'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+function draw(time = performance.now()) {
+  ctx.fillStyle = '#09100d';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
   const spell = availableSpells(game).find(s => s.id === selected);
-  for (let y = 0; y < SIZE; y++) for (let x = 0; x < SIZE; x++) {
-    const n = ((x * 73 + y * 137 + game.seed) % 97) / 97, tVal = game.tiles[y][x];
-    if (tVal === 2) {
-      // Chasm tile
-      ctx.fillStyle = '#060a0d'; ctx.fillRect(x * tile + 1, y * tile + 1, tile - 2, tile - 2);
-      ctx.strokeStyle = '#1b2b34'; ctx.strokeRect(x * tile + 3, y * tile + 3, tile - 6, tile - 6);
-      continue;
-    }
-    const wall = tVal === 1;
-    ctx.fillStyle = wall ? ['#263529', '#2b392b', '#303e2d'][Math.floor(n * 3)] : ['#16221b', '#18251d', '#1a271f'][Math.floor(n * 3)];
-    ctx.fillRect(x * tile + 1, y * tile + 1, tile - 2, tile - 2);
-    if (wall) {
-      ctx.fillStyle = '#42503a'; ctx.fillRect(x * tile + 2, y * tile + 2, tile - 4, 2);
-      ctx.fillStyle = '#142018'; ctx.fillRect(x * tile + 3, y * tile + tile - 5, tile - 4, 4);
-      ctx.fillStyle = n > .5 ? '#576342' : '#394e34'; ctx.fillRect(x * tile + 5 + Math.floor(n * 12), y * tile + 8, 4, 3);
-      ctx.strokeStyle = '#1c2a20'; ctx.beginPath(); ctx.moveTo(x * tile, y * tile + 17); ctx.lineTo((x + 1) * tile, y * tile + 17); ctx.stroke();
-    } else {
-      if (n > .65) { ctx.fillStyle = '#2c3d29'; ctx.fillRect(x * tile + 8, y * tile + 22, 2, 4); ctx.fillRect(x * tile + 11, y * tile + 20, 2, 5); }
-      if (n < .2) { ctx.fillStyle = '#273527'; ctx.fillRect(x * tile + 19, y * tile + 12, 3, 2); }
-      if (spell && (spell.range === 0 || (distance(game.player, { x, y }) <= spell.range && (!spell.requiresLos || hasSight(game, game.player, { x, y }))))) {
-        ctx.fillStyle = `${spell.color}18`; ctx.fillRect(x * tile, y * tile, tile, tile);
+  for (let y = 0; y < SIZE; y++) {
+    for (let x = 0; x < SIZE; x++) {
+      const n = ((x * 73 + y * 137 + game.seed) % 97) / 97;
+      const tVal = game.tiles[y][x];
+      drawDungeonTile(ctx, x, y, tile, tVal, game.theme, n, time);
+      if (tVal === 0 && spell && (spell.range === 0 || (distance(game.player, { x, y }) <= spell.range && (!spell.requiresLos || hasSight(game, game.player, { x, y }))))) {
+        ctx.fillStyle = `${spell.color}1c`;
+        ctx.fillRect(x * tile + 1, y * tile + 1, tile - 2, tile - 2);
       }
     }
   }
-  // Clouds
+
+  // Elemental Clouds
   for (const cloud of game.clouds || []) {
-    ctx.fillStyle = `${cloud.color}38`; ctx.fillRect(cloud.x * tile + 2, cloud.y * tile + 2, tile - 4, tile - 4);
-    ctx.strokeStyle = `${cloud.color}88`; ctx.lineWidth = 1; ctx.strokeRect(cloud.x * tile + 3, cloud.y * tile + 3, tile - 6, tile - 6);
+    drawCanvasCloud(ctx, cloud, tile, time);
   }
-  if (showThreats) for (let y = 1; y < SIZE - 1; y++) for (let x = 1; x < SIZE - 1; x++) {
-    if (game.tiles[y][x] === 0 && threateningEnemies(game, { x, y }).length) { ctx.fillStyle = '#ef796b40'; ctx.fillRect(x * tile, y * tile, tile, tile); }
+
+  // Enemy Threat Zones
+  if (showThreats) {
+    for (let y = 1; y < SIZE - 1; y++) {
+      for (let x = 1; x < SIZE - 1; x++) {
+        if (game.tiles[y][x] === 0 && threateningEnemies(game, { x, y }).length) {
+          ctx.fillStyle = 'rgba(248, 113, 113, 0.24)';
+          ctx.fillRect(x * tile + 1, y * tile + 1, tile - 2, tile - 2);
+          ctx.strokeStyle = 'rgba(248, 113, 113, 0.5)';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(x * tile + 1.5, y * tile + 1.5, tile - 3, tile - 3);
+        }
+      }
+    }
   }
+
+  // Shrine
   if (game.shrine) {
-    ctx.fillStyle = game.shrine.uses ? '#7bd0ff' : '#53635c';
-    ctx.font = '22px monospace';
-    ctx.fillText(SHRINE_ICONS[game.shrine.type] || '⚒', game.shrine.x * tile + 5, game.shrine.y * tile + 24);
+    drawCanvasShrine(ctx, game.shrine, tile, time);
   }
+
+  // Dimensional Portals
+  const portalsOpen = game.enemies.length === 0;
   for (const portal of game.portals) {
-    const cx = portal.x * tile + tile / 2, cy = portal.y * tile + tile / 2;
-    ctx.strokeStyle = game.enemies.length ? '#657452' : portal.theme ? '#e7a378' : '#bbaddb'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.ellipse(cx, cy, 10, 13, 0, 0, Math.PI * 2); ctx.stroke();
-    ctx.fillStyle = game.enemies.length ? '#394832' : '#8b81ac'; ctx.fillRect(cx - 3, cy - 6, 6, 12);
-    ctx.fillStyle = '#b3c99b'; ctx.fillRect(cx - 1, cy - 3, 2, 6);
+    drawCanvasPortal(ctx, portal, tile, portalsOpen, time);
   }
+
+  // Items & Pickups
   for (const item of game.items) {
-    const visual = itemVisual(item);
-    sprite(sprites[visual.key], item.x, item.y, visual.colors);
+    drawCanvasItem(ctx, item, tile, time);
   }
+
   // Allied Minions
   for (const ally of game.allies || []) {
-    ctx.strokeStyle = '#4ade80aa'; ctx.lineWidth = 1.5; ctx.strokeRect(ally.x * tile + 2, ally.y * tile + 2, tile - 4, tile - 4);
-    sprite(sprites.ally, ally.x, ally.y, { a: ally.color || '#4ade80', b: '#e2f7e8' }, 2);
-    if (ally.hp < ally.maxHp) { ctx.fillStyle = '#223328'; ctx.fillRect(ally.x * tile + 5, ally.y * tile + 28, 22, 2); ctx.fillStyle = '#4ade80'; ctx.fillRect(ally.x * tile + 5, ally.y * tile + 28, 22 * ally.hp / ally.maxHp, 2); }
-    if (ally.shields > 0) { ctx.fillStyle = '#7bd0ff'; ctx.font = 'bold 9px monospace'; ctx.fillText(String(ally.shields), ally.x * tile + 3, ally.y * tile + 11); }
+    drawCanvasAlly(ctx, ally, tile, time);
+    if (ally.hp < ally.maxHp) {
+      ctx.fillStyle = '#14261c';
+      ctx.fillRect(ally.x * tile + 4, ally.y * tile + 27, 24, 3);
+      ctx.fillStyle = '#4ade80';
+      ctx.fillRect(ally.x * tile + 4, ally.y * tile + 27, 24 * Math.max(0, ally.hp / ally.maxHp), 3);
+    }
+    if (ally.shields > 0) {
+      ctx.fillStyle = '#09100d';
+      ctx.fillRect(ally.x * tile + 1, ally.y * tile + 1, 11, 10);
+      ctx.fillStyle = '#7bd0ff';
+      ctx.font = 'bold 9px "JetBrains Mono", monospace';
+      ctx.fillText(String(ally.shields), ally.x * tile + 3, ally.y * tile + 9);
+    }
   }
+
   // Enemies & Spawners
   for (const enemy of game.enemies) {
+    drawCanvasEnemy(ctx, enemy, tile, time);
     if (enemy.isSpawner) {
-      sprite(sprites.lair, enemy.x, enemy.y, { a: '#a78bfa', b: '#4c1d95', c: '#f472b6' }, 2);
-      ctx.fillStyle = '#f472b6'; ctx.font = 'bold 9px monospace'; ctx.fillText(String(enemy.spawnCooldown), enemy.x * tile + 23, enemy.y * tile + 11);
-    } else {
-      const colors = ['#c48b69', '#a9ae8b', '#ba9dbd', '#a6bb83'];
-      sprite(sprites[['imp', 'knight', 'eye', 'moth'][enemy.type]], enemy.x, enemy.y, { a: enemy.isFinalBoss ? '#f87171' : enemy.boss ? '#e5c27b' : colors[enemy.type], b: '#4b493c', c: '#f4dca5' }, enemy.boss ? 3 : 2);
+      ctx.fillStyle = 'rgba(9, 16, 13, 0.85)';
+      ctx.fillRect(enemy.x * tile + 19, enemy.y * tile + 1, 12, 11);
+      ctx.fillStyle = '#f472b6';
+      ctx.font = 'bold 9px "JetBrains Mono", monospace';
+      ctx.fillText(String(enemy.spawnCooldown), enemy.x * tile + 22, enemy.y * tile + 10);
     }
-    if (enemy.hp < enemy.maxHp) { ctx.fillStyle = '#42332b'; ctx.fillRect(enemy.x * tile + 5, enemy.y * tile + 28, 22, 2); ctx.fillStyle = '#d79f82'; ctx.fillRect(enemy.x * tile + 5, enemy.y * tile + 28, 22 * enemy.hp / enemy.maxHp, 2); }
-    if (enemy.shields > 0) { ctx.fillStyle = '#7bd0ff'; ctx.font = 'bold 9px monospace'; ctx.fillText(String(enemy.shields), enemy.x * tile + 3, enemy.y * tile + 11); }
-    if (Object.values(enemy.statuses || {}).some(n => n > 0)) { ctx.fillStyle = enemy.statuses.freeze ? '#7bd0ff' : enemy.statuses.stun || enemy.statuses.petrify ? '#facc15' : '#e5b77e'; ctx.fillRect(enemy.x * tile + 26, enemy.y * tile + 4, 3, 3); }
-    if (!enemy.isSpawner && distance(enemy, game.player) <= enemy.range && hasSight(game, enemy, game.player)) { ctx.fillStyle = '#f87171'; ctx.font = 'bold 10px monospace'; ctx.fillText('!', enemy.x * tile + 26, enemy.y * tile + 15); }
+    if (enemy.hp < enemy.maxHp) {
+      ctx.fillStyle = '#2e1616';
+      ctx.fillRect(enemy.x * tile + 4, enemy.y * tile + 27, 24, 3);
+      ctx.fillStyle = '#f87171';
+      ctx.fillRect(enemy.x * tile + 4, enemy.y * tile + 27, 24 * Math.max(0, enemy.hp / enemy.maxHp), 3);
+    }
+    if (enemy.shields > 0) {
+      ctx.fillStyle = 'rgba(9, 16, 13, 0.85)';
+      ctx.fillRect(enemy.x * tile + 1, enemy.y * tile + 1, 11, 10);
+      ctx.fillStyle = '#7bd0ff';
+      ctx.font = 'bold 9px "JetBrains Mono", monospace';
+      ctx.fillText(String(enemy.shields), enemy.x * tile + 3, enemy.y * tile + 9);
+    }
+    if (Object.values(enemy.statuses || {}).some(n => n > 0)) {
+      ctx.fillStyle = enemy.statuses.freeze ? '#7bd0ff' : enemy.statuses.stun || enemy.statuses.petrify ? '#facc15' : '#fb923c';
+      ctx.beginPath();
+      ctx.arc(enemy.x * tile + 27, enemy.y * tile + 5, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (!enemy.isSpawner && distance(enemy, game.player) <= enemy.range && hasSight(game, enemy, game.player)) {
+      ctx.fillStyle = '#f87171';
+      ctx.font = 'bold 11px "JetBrains Mono", monospace';
+      ctx.fillText('!', enemy.x * tile + 24, enemy.y * tile + 17);
+    }
   }
-  ctx.fillStyle = '#e5c27b18'; ctx.fillRect(game.player.x * tile, game.player.y * tile, tile, tile);
-  sprite(sprites.wizard, game.player.x, game.player.y, { a: '#b7c5a0', b: '#e6d8b7', c: '#334734' });
-  ctx.fillStyle = '#c9b47f'; ctx.fillRect(game.player.x * tile + 27, game.player.y * tile + 12, 2, 16); ctx.fillStyle = '#eee1a1'; ctx.fillRect(game.player.x * tile + 25, game.player.y * tile + 9, 6, 5);
-  for (const effect of game.effects || []) { ctx.strokeStyle = effect.color; ctx.lineWidth = 2; ctx.strokeRect(effect.x * tile + 3, effect.y * tile + 3, tile - 6, tile - 6); }
+
+  // Player Wizard
+  drawCanvasWizard(ctx, game.player, tile, time);
+
+  // Spell Impact VFX
+  for (const effect of game.effects || []) {
+    drawCanvasEffect(ctx, effect, tile);
+  }
+
+  // Hover Reticle & AoE Preview
   if (hover) {
-    if (spell) for (let y = Math.max(0, hover.y - (spell.radius || 0)); y <= Math.min(SIZE - 1, hover.y + (spell.radius || 0)); y++) for (let x = Math.max(0, hover.x - (spell.radius || 0)); x <= Math.min(SIZE - 1, hover.x + (spell.radius || 0)); x++) { ctx.fillStyle = `${spell.color}25`; ctx.fillRect(x * tile, y * tile, tile, tile); }
-    ctx.strokeStyle = spell ? spell.color : '#cbd4b1'; ctx.lineWidth = 1; ctx.strokeRect(hover.x * tile + 1, hover.y * tile + 1, tile - 2, tile - 2);
+    if (spell) {
+      const r = spell.radius || 0;
+      for (let y = Math.max(0, hover.y - r); y <= Math.min(SIZE - 1, hover.y + r); y++) {
+        for (let x = Math.max(0, hover.x - r); x <= Math.min(SIZE - 1, hover.x + r); x++) {
+          ctx.fillStyle = `${spell.color}30`;
+          ctx.fillRect(x * tile + 1, y * tile + 1, tile - 2, tile - 2);
+        }
+      }
+    }
+    ctx.strokeStyle = spell ? spell.color : '#ffdf9f';
+    ctx.lineWidth = 1.8;
+    ctx.strokeRect(hover.x * tile + 1.5, hover.y * tile + 1.5, tile - 3, tile - 3);
   }
+}
+
+// Smooth idle animation loop for portals, floating gems, flames & wizard orb
+let lastFrame = 0;
+function animate(now) {
+  if (view === 'realm' && !document.hidden && now - lastFrame > 50) {
+    lastFrame = now;
+    draw(now);
+  }
+  requestAnimationFrame(animate);
 }
 
 function save() {
@@ -158,17 +204,22 @@ function save() {
 
 function render() {
   const maxR = finalRealmOf(game);
-  $('seed-label').textContent = String(game.seed).slice(-6).padStart(6, '0');
+  $('seed-label').textContent = `#${String(game.seed).slice(-6).padStart(6, '0')}`;
   $('mode-badge').textContent = game.mode && game.mode !== 'standard' ? t(`mode.${game.mode}`).split('(')[0].trim() : '';
-  $('health-label').textContent = `${game.player.hp} / ${maxHealth(game)}`; $('health-bar').style.width = `${Math.min(100, game.player.hp / maxHealth(game) * 100)}%`;
+  $('health-label').textContent = `${game.player.hp} / ${maxHealth(game)}`;
+  $('health-bar').style.width = `${Math.min(100, game.player.hp / maxHealth(game) * 100)}%`;
   $('shields-label').textContent = game.player.shields || 0;
-  $('shield-label').textContent = game.player.shield; $('points-label').textContent = game.points; $('potions-label').textContent = game.potions;
+  $('shield-label').textContent = game.player.shield;
+  $('points-label').textContent = game.points;
+  $('potions-label').textContent = game.potions;
   $('realm-number').textContent = String(game.realm).padStart(2, '0');
   $('realm-total').textContent = t('realm.ofTotal', { total: maxR });
   $('turn-label').textContent = t('realm.turn', { turn: String(game.turn + 1).padStart(3, '0') });
-  $('realm-name').textContent = t(game.theme ? 'realm.emberfall' : 'realm.mossbound'); $('enemy-count').textContent = game.enemies.length;
+  $('realm-name').textContent = t(game.theme ? 'realm.emberfall' : 'realm.mossbound');
+  $('enemy-count').textContent = game.enemies.length;
   $('rift-status').textContent = t(game.enemies.length ? 'realm.sealed' : 'realm.open');
-  $('potion-button').disabled = !game.potions || game.status !== 'playing'; $('wait-button').disabled = game.status !== 'playing';
+  $('potion-button').disabled = !game.potions || game.status !== 'playing';
+  $('wait-button').disabled = game.status !== 'playing';
 
   // Status banners (Quickstep, Channeling, Active Buffs)
   const mods = getEquipmentModifiers(game);
@@ -182,34 +233,42 @@ function render() {
   $('status-banners').innerHTML = banners.join('');
   if ($('cancel-channel-btn')) $('cancel-channel-btn').onclick = () => { cancelChannel(game); render(); };
 
-  const spells = availableSpells(game); $('spell-count').textContent = String(spells.length).padStart(2, '0');
+  const spells = availableSpells(game);
+  $('spell-count').textContent = String(spells.length).padStart(2, '0');
   $('spell-list').innerHTML = spells.map((s, i) => {
-    const name = s.isRw3 ? s.name : spellName(s);
+    const primaryTag = s.tags?.[0] || 'Arcane';
     const charges = game.charges[s.id] ?? 0;
-    const canUse = game.status === 'playing' && (s.isRw3 ? ((s.maxCharges === 0 || charges > 0) && (!s.hpCost || game.player.hp > s.hpCost)) : charges > 0);
-    const meta = s.isRw3
-      ? `${s.damage ? `${s.damage} DMG` : s.behavior.toUpperCase()} · R${s.range}${s.radius ? ` · A${s.radius}` : ''}${s.hpCost ? ` · -${s.hpCost}HP` : ''}${s.quickCast ? ' · ⚡QC' : ''}`
-      : t('spell.stats', { damage: s.damage, range: s.range, area: s.radius ? t('spell.area', { radius: s.radius }) : '' });
-    const chargeText = s.isRw3 && s.maxCharges === 0 ? '∞' : `${charges}/${s.maxCharges}`;
-    const tooltip = s.isRw3 ? cleanRw3Desc(s.desc) : t('spell.tooltip', { effect: t(`effects.${s.effect}`), shortcut: i < 9 ? t('spell.shortcut', { key: i + 1 }) : '' });
-    return `<button class="spell ${selected === s.id ? 'selected' : ''}" data-spell="${s.id}" data-tooltip="${escapeHtml(tooltip)}" aria-pressed="${selected === s.id}" ${canUse ? '' : 'disabled'}><span class="spell-icon" style="color:${s.color}" aria-hidden="true">${s.icon}</span><span class="spell-text"><strong>${escapeHtml(name)}</strong><small>${escapeHtml(meta)}</small></span><small>${chargeText}<br>${i < 9 ? `[${i + 1}]` : ''}</small></button>`;
+    const canUse = game.status === 'playing' && (s.maxCharges === 0 || charges > 0) && (!s.hpCost || game.player.hp > s.hpCost);
+    const meta = `${s.damage ? `${s.damage} DMG` : s.behavior.toUpperCase()} · R${s.range}${s.radius ? ` · A${s.radius}` : ''}${s.hpCost ? ` · -${s.hpCost}HP` : ''}${s.quickCast ? ' · ⚡QC' : ''}`;
+    const chargeText = s.maxCharges === 0 ? '∞' : `${charges}/${s.maxCharges}`;
+    const tooltip = cleanRw3Desc(s.desc);
+    return `<button class="spell ${selected === s.id ? 'selected' : ''}" data-spell="${s.id}" data-tooltip="${escapeHtml(tooltip)}" aria-pressed="${selected === s.id}" ${canUse ? '' : 'disabled'}>
+      <span class="spell-icon" style="border-color:${s.color}55">${tagIconSvg(primaryTag, 22)}</span>
+      <span class="spell-text"><strong>${escapeHtml(s.name)}</strong><small>${escapeHtml(meta)}</small></span>
+      <span class="spell-meta-right">${chargeText}${i < 9 ? `<br><span class="spell-hotkey">${i + 1}</span>` : ''}</span>
+    </button>`;
   }).join('');
 
   $('allies-badge').textContent = (game.allies || []).length ? `${t('player.allies')}: ${game.allies.length}` : '';
   $('equipped-summary').innerHTML = equipmentSlots.map(slot => {
     const item = game.equipment?.[slot]?.name;
-    return `<div class="eq-slot-row"><span>${h(`slots.${slot.toLowerCase()}`)}</span><strong>${item ? escapeHtml(equipmentName(item)) : '—'}</strong></div>`;
+    return `<div class="eq-slot-row"><span class="eq-slot-label">${slotIconSvg(slot, 15)}<span>${h(`slots.${slot.toLowerCase()}`)}</span></span><strong>${item ? escapeHtml(equipmentName(item)) : '—'}</strong></div>`;
   }).join('');
 
-  $('log').replaceChildren(...game.log.slice(0, 12).map(entry => {
-    const row = document.createElement('div'); row.className = ['gold', 'red', 'green'].includes(entry.tone) ? entry.tone : '';
-    const time = document.createElement('time'); time.textContent = String(entry.turn).padStart(3, '0');
-    row.append(time, document.createTextNode(logText(entry))); return row;
+  $('log').replaceChildren(...game.log.slice(0, 14).map(entry => {
+    const row = document.createElement('div');
+    row.className = ['gold', 'red', 'green'].includes(entry.tone) ? entry.tone : '';
+    const timeEl = document.createElement('time');
+    timeEl.textContent = String(entry.turn).padStart(3, '0');
+    row.append(timeEl, document.createTextNode(logText(entry)));
+    return row;
   }));
+
   const tagCounts = {};
-  for (const s of spells) if (s.isRw3) for (const tg of s.tags) tagCounts[tg] = (tagCounts[tg] || 0) + 1;
+  for (const s of spells) for (const tg of s.tags) tagCounts[tg] = (tagCounts[tg] || 0) + 1;
   const topTag = Object.entries(tagCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'Arcane';
   $('build-label').textContent = `${topTag} · ${game.rw3Spells?.length || 0}`;
+
   $('outcome').hidden = game.status === 'playing';
   if (game.status !== 'playing') {
     const progress = game.progress;
@@ -218,7 +277,7 @@ function render() {
       ['pointsEarned', `+${progress.pointsEarned}`], ['pointsSpent', progress.pointsSpent], ['skills', game.rw3Spells?.length || 0],
       ['spells', progress.spellsCast], ['strikes', progress.staffStrikes], ['potions', progress.potionsUsed],
     ];
-    $('outcome').innerHTML = `<div class="eyebrow">${h(`outcome.${game.status}.eyebrow`)}</div><h2>${h(`outcome.${game.status}.title`)}</h2><p class="outcome-intro">${h('outcome.introduction')}</p><div class="outcome-summary" aria-label="${h('outcome.summary')}">${stats.map(([key, value]) => `<div><span>${h(`outcome.${key}`)}</span><strong>${value}</strong></div>`).join('')}</div><p class="outcome-footnote">${h('outcome.progress', { realms: progress.realmsCleared, turns: game.turn })}</p><button id="restart-outcome">${h('outcome.restart')}</button>`;
+    $('outcome').innerHTML = `<div class="eyebrow">${h(`outcome.${game.status}.eyebrow`)}</div><h2>${h(`outcome.${game.status}.title`)}</h2><p class="outcome-intro">${h('outcome.introduction')}</p><div class="outcome-summary" aria-label="${h('outcome.summary')}">${stats.map(([key, value]) => `<div><span>${h(`outcome.${key}`)}</span><strong>${value}</strong></div>`).join('')}</div><p class="outcome-footnote">${h('outcome.progress', { realms: progress.realmsCleared, turns: game.turn })}</p><button class="primary" id="restart-outcome">${h('outcome.restart')}</button>`;
     $('restart-outcome').onclick = () => $('new-dialog').showModal();
   }
   renderForge();
@@ -229,7 +288,7 @@ function render() {
 
 function updateHint(key) {
   const spell = availableSpells(game).find(s => s.id === selected);
-  $('target-hint').textContent = key ? t(key) : spell ? t('hint.target', { spell: spell.isRw3 ? spell.name : spellName(spell) }) : t('hint.move');
+  $('target-hint').textContent = key ? t(key) : spell ? t('hint.target', { spell: spell.name }) : t('hint.move');
 }
 function action(fn) {
   const done = fn();
@@ -245,6 +304,7 @@ function renderForge() {
 
   const shrine = game.shrine, near = shrine && distance(game.player, shrine) <= 1;
   const sType = shrine?.type || 'transmutation';
+  if ($('shrine-icon-slot')) $('shrine-icon-slot').innerHTML = shrineIconSvg(sType, 22);
   $('shrine-title').textContent = t(`shrine.${sType}`);
   $('shrine-state').textContent = shrine ? t('forge.shrineState', { uses: shrine.uses, reach: t(near ? 'forge.near' : 'forge.far') }) : t('forge.noShrine');
   $('shrine-special-desc').textContent = sType === 'transmutation' ? t('inspection.shrineDescription', { uses: shrine?.uses ?? 0 }) : t(`shrine.${sType}Desc`);
@@ -256,7 +316,7 @@ function renderForge() {
   } else if (sType === 'empowerment') {
     sel.hidden = false;
     const spells = availableSpells(game);
-    sel.innerHTML = spells.map(s => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.isRw3 ? s.name : spellName(s))}</option>`).join('');
+    sel.innerHTML = spells.map(s => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)}</option>`).join('');
     $('shrine-activate-button').disabled = game.status !== 'playing' || !near || !shrine?.uses || !spells.length;
   } else {
     sel.hidden = true;
@@ -290,10 +350,10 @@ function inspect(p) {
       : enemy.statuses.freeze || enemy.statuses.stun || enemy.statuses.petrify ? t('inspection.frozen')
       : distance(enemy, game.player) <= enemy.range && hasSight(game, enemy, game.player) ? t('inspection.attack') : t('inspection.approach');
     const title = enemy.isSpawner ? t('inspection.spawner') : enemy.isFinalBoss ? 'Mordred' : enemyName(enemy);
-    const iconKey = enemy.isSpawner ? 'lair' : ['imp', 'knight', 'eye', 'moth'][enemy.type];
-    $('inspection').innerHTML = `<div class="inspect-symbol">${spriteIcon(iconKey, { a: enemy.isFinalBoss ? '#f87171' : enemy.boss ? '#e5c27b' : '#c5ad91', b: '#4b493c', c: '#f4dca5' })}</div><h3>${escapeHtml(title)}${enemy.shields ? ` <span class="cyan-val">[${enemy.shields} SH]</span>` : ''}</h3><p>${h('inspection.enemyStats', enemy)}<br><span style="color:var(--gold)">${escapeHtml(nextAction)}</span></p>${renderResistances(enemy)}${renderStatuses(enemy)}`;
+    const iconKey = enemy.isSpawner ? 'lair' : enemy.isFinalBoss ? 'mordred' : enemy.boss ? 'boss' : ['imp', 'knight', 'eye', 'moth'][enemy.type];
+    $('inspection').innerHTML = `<div class="inspect-head"><div class="inspect-symbol">${entityIconSvg(iconKey, 34)}</div><div><h3>${escapeHtml(title)}${enemy.shields ? ` <span class="cyan-val">[${enemy.shields} SH]</span>` : ''}</h3><p style="margin:2px 0 0;color:var(--gold)">${escapeHtml(nextAction)}</p></div></div><p>${h('inspection.enemyStats', enemy)}</p>${renderResistances(enemy)}${renderStatuses(enemy)}`;
   } else if (ally) {
-    $('inspection').innerHTML = `<div class="inspect-symbol">${spriteIcon('ally', { a: ally.color || '#4ade80', b: '#e2f7e8' })}</div><h3>${escapeHtml(ally.name)} (${h('inspection.ally')})</h3><p>HP ${ally.hp}/${ally.maxHp} · DMG ${ally.damage} · R${ally.range}${ally.shields ? ` · ${ally.shields} SH` : ''}${ally.duration ? ` · ${ally.duration}t` : ''}</p>${renderResistances(ally)}`;
+    $('inspection').innerHTML = `<div class="inspect-head"><div class="inspect-symbol">${entityIconSvg('ally', 34)}</div><div><h3>${escapeHtml(ally.name)}</h3><p style="margin:2px 0 0;color:var(--green)">${h('inspection.ally')}</p></div></div><p>HP ${ally.hp}/${ally.maxHp} · DMG ${ally.damage} · R${ally.range}${ally.shields ? ` · ${ally.shields} SH` : ''}${ally.duration ? ` · ${ally.duration}t` : ''}</p>${renderResistances(ally)}`;
   } else if (p && game.portals.some(r => distance(r, p) === 0)) {
     const portal = game.portals.find(r => distance(r, p) === 0), next = previewPortal(game, portal.theme);
     const preview = next ? [
@@ -302,25 +362,25 @@ function inspect(p) {
       h('inspection.shrines', { shrines: t(`shrine.${next.shrine}`) }),
       next.rw3Components?.length ? `RW3: ${next.rw3Components.map(componentName).join(', ')}` : '',
     ].filter(Boolean).join('<br>') : h('inspection.finalPortal');
-    $('inspection').innerHTML = `<div class="inspect-symbol">◈</div><h3>${h(portal.theme ? 'inspection.emberfallRift' : 'inspection.mossboundRift')}</h3><p>${h(game.enemies.length ? 'inspection.portalLocked' : 'inspection.portalOpen')}</p><p>${preview}</p>`;
+    $('inspection').innerHTML = `<div class="inspect-head"><div class="inspect-symbol">${entityIconSvg(portal.theme ? 'portal-ember' : 'portal-moss', 34)}</div><div><h3>${h(portal.theme ? 'inspection.emberfallRift' : 'inspection.mossboundRift')}</h3><p style="margin:2px 0 0">${h(game.enemies.length ? 'inspection.portalLocked' : 'inspection.portalOpen')}</p></div></div><p>${preview}</p>`;
   } else if (p && game.shrine && distance(game.shrine, p) === 0) {
     const sType = game.shrine.type || 'transmutation';
-    $('inspection').innerHTML = `<div class="inspect-symbol">${SHRINE_ICONS[sType] || '⚒'}</div><h3>${h(`shrine.${sType}`)}</h3><p>${sType === 'transmutation' ? h('inspection.shrineDescription', { uses: game.shrine.uses }) : h(`shrine.${sType}Desc`)}</p>`;
+    $('inspection').innerHTML = `<div class="inspect-head"><div class="inspect-symbol">${shrineIconSvg(sType, 32)}</div><div><h3>${h(`shrine.${sType}`)}</h3></div></div><p>${sType === 'transmutation' ? h('inspection.shrineDescription', { uses: game.shrine.uses }) : h(`shrine.${sType}Desc`)}</p>`;
   } else if (p && game.items.some(i => distance(i, p) === 0)) {
     const item = game.items.find(i => distance(i, p) === 0);
     const comp = item.type === 'rw3-component' ? componentByName.get(item.name) : null;
+    const iconKey = item.type === 'potion' ? 'potion' : item.type === 'shard' ? 'shard' : 'component';
     const description = item.type === 'component' ? t('inspection.material', { material: t(`materials.${item.material}`) }) : item.type === 'rw3-component' ? `${componentName(item.name)}${comp?.desc ? ` — ${cleanRw3Desc(comp.desc)}` : ''}` : t(item.type === 'shard' ? 'inspection.shard' : 'inspection.potion');
-    const visual = itemVisual(item);
-    $('inspection').innerHTML = `<div class="inspect-symbol">${spriteIcon(visual.key, visual.colors)}</div><p>${escapeHtml(description)}</p>`;
+    $('inspection').innerHTML = `<div class="inspect-head"><div class="inspect-symbol">${entityIconSvg(iconKey, 34)}</div><div><h3>${escapeHtml(item.type === 'rw3-component' ? componentName(item.name) : item.type.toUpperCase())}</h3></div></div><p>${escapeHtml(description)}</p>`;
   } else if (p && distance(game.player, p) === 0) {
-    $('inspection').innerHTML = `<div class="inspect-symbol">✧</div><h3>${h('inspection.player')}</h3><p>${h('inspection.playerHealth', { hp: game.player.hp, maxHp: maxHealth(game), ward: game.player.shield })} · <span class="cyan-val">${game.player.shields || 0} SH</span><br>${h('inspection.playerResources', { points: game.points, potions: game.potions })}</p>${renderResistances(game.player)}`;
+    $('inspection').innerHTML = `<div class="inspect-head"><div class="inspect-symbol" style="overflow:hidden;padding:0">${wizardPortraitSvg()}</div><div><h3>${h('inspection.player')}</h3><p style="margin:2px 0 0"><span class="cyan-val">${game.player.shields || 0} SH</span></p></div></div><p>${h('inspection.playerHealth', { hp: game.player.hp, maxHp: maxHealth(game), ward: game.player.shield })}<br>${h('inspection.playerResources', { points: game.points, potions: game.potions })}</p>${renderResistances(game.player)}`;
   } else if (cloud) {
     const def = CLOUD_TYPES[cloud.type] || CLOUD_TYPES.fire;
-    $('inspection').innerHTML = `<div class="inspect-symbol" style="color:${cloud.color}">☁</div><h3>${escapeHtml(def.name)}</h3><p>${h('inspection.cloud')} · ${cloud.duration}t${cloud.damage ? ` · ${cloud.damage} ${cloud.damageType}` : ''}</p>`;
+    $('inspection').innerHTML = `<div class="inspect-head"><div class="inspect-symbol">${entityIconSvg('cloud', 34)}</div><div><h3>${escapeHtml(def.name)}</h3></div></div><p>${h('inspection.cloud')} · ${cloud.duration}t${cloud.damage ? ` · ${cloud.damage} ${cloud.damageType}` : ''}</p>`;
   } else if (p && game.tiles[p.y]?.[p.x] === 2) {
-    $('inspection').innerHTML = `<div class="inspect-symbol">▽</div><h3>${h('inspection.chasm')}</h3><p>${h('inspection.chasmDesc')}</p>`;
+    $('inspection').innerHTML = `<div class="inspect-head"><div class="inspect-symbol">${entityIconSvg('chasm', 34)}</div><div><h3>${h('inspection.chasm')}</h3></div></div><p>${h('inspection.chasmDesc')}</p>`;
   } else {
-    $('inspection').innerHTML = `<div class="inspect-symbol">⌖</div><h3>${h('inspection.emptyTitle')}</h3><p>${h('inspection.emptyDescription')}</p>`;
+    $('inspection').innerHTML = `<div class="inspect-head"><div class="inspect-symbol">${entityIconSvg('empty', 30)}</div><div><h3>${h('inspection.emptyTitle')}</h3></div></div><p>${h('inspection.emptyDescription')}</p>`;
   }
 }
 
@@ -337,6 +397,7 @@ function renderHeading() {
 
 function setView(next) {
   view = next;
+  document.body.classList.toggle('view-realm', next === 'realm');
   $('realm-view').hidden = next !== 'realm';
   $('grimoire-view').hidden = next !== 'grimoire';
   $('forge-view').hidden = next !== 'forge';
@@ -388,7 +449,9 @@ function renderRw3Grimoire() {
     const isLearned = learnedSet.has(s.id);
     const canBuy = canLearnRw3Spell(game, s.id);
     const upCount = (game.rw3Upgrades?.[s.id] || []).length;
-    const tagPills = s.tags.map(tg => `<span class="tag-pill" style="color:${(TAG_META[tg] || TAG_META.Arcane).color}">${escapeHtml(tg)}</span>`).join('');
+    const primaryTag = s.tags?.[0] || 'Arcane';
+    const primaryColor = (TAG_META[primaryTag] || TAG_META.Arcane).color;
+    const tagPills = s.tags.map(tg => `<span class="tag-pill" style="color:${(TAG_META[tg] || TAG_META.Arcane).color}">${tagIconSvg(tg, 12)}<span>${escapeHtml(tg)}</span></span>`).join('');
     const statsParts = [];
     if (s.stats?.damage) statsParts.push(`DMG ${s.stats.damage}`);
     if (s.stats?.range) statsParts.push(`RNG ${s.stats.range}`);
@@ -396,7 +459,13 @@ function renderRw3Grimoire() {
     if (s.stats?.hp_cost) statsParts.push(`HP -${s.stats.hp_cost}`);
     if (s.stats?.minion_health) statsParts.push(`MINION ${s.stats.minion_health}HP`);
     return `<div class="rw3-card ${isLearned ? 'learned-card' : ''}">
-      <div class="rw3-card-head"><h3>${escapeHtml(s.name)}</h3><span class="rw3-lvl">${isLearned ? h('rw3.learnedBadge') : `LVL ${s.level} · ${s.level} SP`}</span></div>
+      <div class="rw3-card-head">
+        <div class="rw3-card-title-group">
+          <span class="card-emblem" style="border-color:${primaryColor}55">${tagIconSvg(primaryTag, 22)}</span>
+          <h3>${escapeHtml(s.name)}</h3>
+        </div>
+        <span class="rw3-lvl">${isLearned ? h('rw3.learnedBadge') : `LVL ${s.level} · ${s.level} SP`}</span>
+      </div>
       <div class="chip-wrap">${tagPills}</div>
       <div class="rw3-stats-line">${statsParts.map(x => `<span>${escapeHtml(x)}</span>`).join('')}</div>
       <p class="rw3-desc">${escapeHtml(cleanRw3Desc(s.desc))}</p>
@@ -415,7 +484,8 @@ function showRw3SpellDetail(spellId) {
   const eff = effectiveRw3Spell(game, spellId);
   const isLearned = (game.rw3Spells || []).includes(spellId);
   const learnedUps = new Set(game.rw3Upgrades?.[spellId] || []);
-  const tagPills = eff.tags.map(tg => `<span class="tag-pill" style="color:${(TAG_META[tg] || TAG_META.Arcane).color}">${escapeHtml(tg)}</span>`).join('');
+  const primaryTag = eff.tags?.[0] || 'Arcane';
+  const tagPills = eff.tags.map(tg => `<span class="tag-pill" style="color:${(TAG_META[tg] || TAG_META.Arcane).color}">${tagIconSvg(tg, 12)}<span>${escapeHtml(tg)}</span></span>`).join('');
   const upsHtml = (base.upgrades || []).map(u => {
     const owned = learnedUps.has(u.sp_id);
     const canBuy = canLearnRw3Upgrade(game, spellId, u.sp_id);
@@ -428,7 +498,10 @@ function showRw3SpellDetail(spellId) {
 
   $('detail-content').innerHTML = `
     <div class="eyebrow">RW3 · LVL ${base.level}</div>
-    <h2>${escapeHtml(base.name)}</h2>
+    <div class="rw3-card-title-group" style="margin:8px 0 12px">
+      <span class="card-emblem">${tagIconSvg(primaryTag, 24)}</span>
+      <h2 style="margin:0">${escapeHtml(base.name)}</h2>
+    </div>
     <div class="chip-wrap">${tagPills}</div>
     <p class="rw3-desc" style="margin-top:10px">${escapeHtml(cleanRw3Desc(base.desc))}</p>
     <div class="detail-stats">
@@ -459,9 +532,22 @@ function renderRw3ForgeView() {
   $('rw3-satchel-chips').innerHTML = game.rw3Components.length
     ? game.rw3Components.map(name => {
       const comp = componentByName.get(name);
-      return `<span class="tag-pill" title="${escapeHtml(cleanRw3Desc(comp?.desc || ''))}">${escapeHtml(componentName(name))} <small style="opacity:.7">(${(comp?.tags || []).join('/')})</small></span>`;
+      return `<span class="tag-pill" title="${escapeHtml(cleanRw3Desc(comp?.desc || ''))}">${entityIconSvg('component', 13)}<span>${escapeHtml(componentName(name))}</span> <small style="opacity:.7">(${(comp?.tags || []).join('/')})</small></span>`;
     }).join('')
     : `<span class="muted">${h('forge.empty')}</span>`;
+
+  if ($('forge-equipped-strip')) {
+    $('forge-equipped-strip').innerHTML = equipmentSlots.map(slot => {
+      const item = game.equipment?.[slot]?.name;
+      return `<div class="loadout-slot-card ${item ? 'equipped' : ''}">
+        ${slotIconSvg(slot, 22)}
+        <div>
+          <span>${h(`slots.${slot.toLowerCase()}`)}</span>
+          <strong>${item ? escapeHtml(equipmentName(item)) : '—'}</strong>
+        </div>
+      </div>`;
+    }).join('');
+  }
 
   const q = $('rw3-eq-search').value.trim().toLowerCase();
   const slot = $('rw3-slot-filter').value;
@@ -480,8 +566,14 @@ function renderRw3ForgeView() {
     const recipeText = item.recipe.map(([tg, c]) => `${c}× ${tg}`).join(' + ');
     const bonuses = [...(item.bonuses || []), item.desc].filter(Boolean).map(cleanRw3Desc).join('\n');
     return `<div class="rw3-card ${canMake ? 'craftable-card' : ''} ${equipped ? 'learned-card' : ''}">
-      <div class="rw3-card-head"><h3>${escapeHtml(equipmentName(item.name))}</h3><span class="rw3-lvl">${h(`slots.${item.slot.toLowerCase()}`)}</span></div>
-      <div class="chip-wrap">${item.tags.map(tg => `<span class="tag-pill" style="color:${(TAG_META[tg] || TAG_META.Arcane).color}">${escapeHtml(tg)}</span>`).join('')}</div>
+      <div class="rw3-card-head">
+        <div class="rw3-card-title-group">
+          <span class="card-emblem">${slotIconSvg(item.slot, 22)}</span>
+          <h3>${escapeHtml(equipmentName(item.name))}</h3>
+        </div>
+        <span class="rw3-lvl">${h(`slots.${item.slot.toLowerCase()}`)}</span>
+      </div>
+      <div class="chip-wrap">${item.tags.map(tg => `<span class="tag-pill" style="color:${(TAG_META[tg] || TAG_META.Arcane).color}">${tagIconSvg(tg, 12)}<span>${escapeHtml(tg)}</span></span>`).join('')}</div>
       <div class="rw3-stats-line"><span>${escapeHtml(recipeText)}</span></div>
       <p class="rw3-desc">${escapeHtml(bonuses)}</p>
       <div class="rw3-card-actions">
@@ -506,7 +598,7 @@ $('cancel-new').onclick = () => $('new-dialog').close();
 $('confirm-new').onclick = () => {
   const input = $('new-seed'); if (!input.checkValidity()) { input.reportValidity(); return; }
   const mode = $('new-mode').value || 'standard';
-  game = input.value ? createGame(Number(input.value), { enableBigBang: isLocalDevelopment, mode }) : createGame(undefined, { enableBigBang: isLocalDevelopment, mode });
+  game = createGame(input.value ? Number(input.value) : undefined, { mode });
   selected = null; hover = null; inspectionTarget = null; $('new-dialog').close(); setView('realm'); render();
 };
 for (const button of document.querySelectorAll('.close-dialog')) button.onclick = () => button.closest('dialog').close();
@@ -566,7 +658,10 @@ document.addEventListener('keydown', event => {
   else if (/^[1-9]$/.test(key)) { const spell = availableSpells(game)[Number(key) - 1]; if (spell) { selected = spell.id; render(); } }
 });
 
+initStaticIcons();
+document.body.classList.add('view-realm');
 translatePage();
 populateFilters();
 renderHeading();
 render();
+requestAnimationFrame(animate);

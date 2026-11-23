@@ -10,12 +10,6 @@ import {
 
 export const SIZE = 23;
 export const FINAL_REALM = 100;
-export const BIG_BANG_SEED = 666;
-export const bigBangSpell = Object.freeze({
-  id: 'dev-big-bang', name: 'Big Bang', color: '#fff3a1', icon: '✹', damage: 50000,
-  range: SIZE, radius: SIZE, chains: 0, maxCharges: 1, duration: 0, stats: { pierce: 0, echo: 0, leech: 0, vitality: 0, armor: 0 },
-  effect: 'annihilation', global: true,
-});
 
 const ENEMY_ARCHETYPES = [
   { name: 'Cinder imp', tags: ['Demon', 'Fire'], resistances: { Fire: 75, Ice: -50 }, flying: false, shields: 0 },
@@ -32,7 +26,7 @@ export function maxHealth(game) {
   return 55 + (game.bonusMaxHp || 0);
 }
 
-export function createGame(seed = Date.now() % 2147483647, { enableBigBang = false, mode = 'standard' } = {}) {
+export function createGame(seed = Date.now() % 2147483647, { mode = 'standard' } = {}) {
   const cfg = getModeConfig(mode);
   const isRw3Mode = cfg.id !== 'standard';
   const game = {
@@ -43,7 +37,6 @@ export function createGame(seed = Date.now() % 2147483647, { enableBigBang = fal
     player: { x: 3, y: 11, hp: 55, shield: 0, shields: isRw3Mode ? 2 : 0, resistances: {}, statuses: {} },
     bonusMaxHp: 0, allies: [], clouds: [], buffs: [], channel: null, quickstepUsed: false,
     charges: {}, potions: cfg.potions ? 3 : 0, kills: 0, status: 'playing', log: [], effects: [], theme: 0,
-    bigBangEnabled: seed === BIG_BANG_SEED && enableBigBang,
     progress: { damageDealt: 0, pointsEarned: 0, pointsSpent: 0, spellsCast: 0, staffStrikes: 0, potionsUsed: 0, realmsCleared: 0 },
   };
   generateRealm(game);
@@ -52,9 +45,7 @@ export function createGame(seed = Date.now() % 2147483647, { enableBigBang = fal
 }
 
 export function availableSpells(game) {
-  const spells = (game.rw3Spells || []).map(id => effectiveRw3Spell(game, id)).filter(Boolean);
-  if (game.seed === BIG_BANG_SEED && game.bigBangEnabled) spells.unshift(bigBangSpell);
-  return spells;
+  return (game.rw3Spells || []).map(id => effectiveRw3Spell(game, id)).filter(Boolean);
 }
 
 export function generateRealm(game) {
@@ -810,48 +801,36 @@ export function cast(game, spellId, target) {
   const spell = availableSpells(game).find(s => s.id === spellId);
   if (!spell || !Number.isInteger(target?.x) || !Number.isInteger(target?.y)) return false;
 
-  if (spell.isRw3) {
-    const effectiveTarget = spell.range === 0 ? { x: game.player.x, y: game.player.y } : target;
-    const canTargetWall = /destroy a wall/i.test(spell.desc || '') && game.tiles[effectiveTarget.y]?.[effectiveTarget.x] === 1;
-    const tileOk = canTargetWall || isPassable(game, effectiveTarget.x, effectiveTarget.y, true);
-    if (!tileOk) return false;
-    if (spell.range > 0 && distance(game.player, effectiveTarget) > spell.range) return false;
-    if (spell.range > 0 && spell.requiresLos && !hasSight(game, game.player, effectiveTarget)) return false;
-    if (spell.maxCharges > 0 && !(game.charges[spellId] > 0)) return false;
-    if (spell.hpCost > 0 && game.player.hp <= spell.hpCost) return false;
+  const effectiveTarget = spell.range === 0 ? { x: game.player.x, y: game.player.y } : target;
+  const canTargetWall = /destroy a wall/i.test(spell.desc || '') && game.tiles[effectiveTarget.y]?.[effectiveTarget.x] === 1;
+  const tileOk = canTargetWall || isPassable(game, effectiveTarget.x, effectiveTarget.y, true);
+  if (!tileOk) return false;
+  if (spell.range > 0 && distance(game.player, effectiveTarget) > spell.range) return false;
+  if (spell.range > 0 && spell.requiresLos && !hasSight(game, game.player, effectiveTarget)) return false;
+  if (spell.maxCharges > 0 && !(game.charges[spellId] > 0)) return false;
+  if (spell.hpCost > 0 && game.player.hp <= spell.hpCost) return false;
 
-    if (spell.maxCharges > 0) game.charges[spellId]--;
-    if (spell.hpCost > 0) game.player.hp -= spell.hpCost;
-    game.progress.spellsCast++;
-    game.effects = [];
+  if (spell.maxCharges > 0) game.charges[spellId]--;
+  if (spell.hpCost > 0) game.player.hp -= spell.hpCost;
+  game.progress.spellsCast++;
+  game.effects = [];
 
-    const hits = resolveRw3Cast(game, spell, effectiveTarget);
-    if (spell.maxChannel > 1) {
-      game.channel = {
-        spellId, target: { ...effectiveTarget },
-        turnsLeft: spell.maxChannel - 1, totalTurns: spell.maxChannel,
-        isRitual: spell.tags.includes('Ritual'),
-      };
-    } else {
-      game.channel = null;
-    }
-
-    game.effects.push({ ...effectiveTarget, color: spell.color });
-    log(game, hits === 1 ? 'log.cast.one' : 'log.cast.other', { spell: spell.name, count: hits });
-    cleanup(game);
-    if (!spell.quickCast) endTurn(game);
-    return true;
+  const hits = resolveRw3Cast(game, spell, effectiveTarget);
+  if (spell.maxChannel > 1) {
+    game.channel = {
+      spellId, target: { ...effectiveTarget },
+      turnsLeft: spell.maxChannel - 1, totalTurns: spell.maxChannel,
+      isRitual: spell.tags.includes('Ritual'),
+    };
+  } else {
+    game.channel = null;
   }
 
-  // Global dev spell (Big Bang)
-  if (spell.global) {
-    if (!game.charges[spellId]) return false;
-    game.charges[spellId]--; game.progress.spellsCast++; game.effects = []; game.channel = null;
-    for (const enemy of game.enemies) { damageEnemy(game, enemy, spell.damage); game.effects.push({ x: enemy.x, y: enemy.y, color: spell.color }); }
-    log(game, game.enemies.length === 1 ? 'log.cast.one' : 'log.cast.other', { spell: textRef(`spells.${spell.id}.name`), count: game.enemies.length });
-    cleanup(game); endTurn(game); return true;
-  }
-  return false;
+  game.effects.push({ ...effectiveTarget, color: spell.color });
+  log(game, hits === 1 ? 'log.cast.one' : 'log.cast.other', { spell: spell.name, count: hits });
+  cleanup(game);
+  if (!spell.quickCast) endTurn(game);
+  return true;
 }
 
 export function wait(game) {
@@ -928,9 +907,10 @@ export function restore(value) {
     game.player.shields ??= 0; game.player.resistances ??= {}; game.player.statuses ??= {};
     game.rw3Components ??= []; game.equipment ??= {};
     game.shrine ??= null;
-    game.bigBangEnabled ??= false;
-    if (typeof game.bigBangEnabled !== 'boolean' || (game.bigBangEnabled && game.seed !== BIG_BANG_SEED)
-      || !Array.isArray(game.rw3Components) || !game.rw3Components.every(name => componentByName.has(name))
+    delete game.bigBangEnabled;
+    delete game.charges['dev-big-bang'];
+    delete game.spellBoosts['dev-big-bang'];
+    if (!Array.isArray(game.rw3Components) || !game.rw3Components.every(name => componentByName.has(name))
       || !Array.isArray(game.rw3Spells) || !game.rw3Spells.every(id => spellById.has(id))
       || !Object.values(game.equipment).every(entry => entry && typeof entry.name === 'string' && Array.isArray(entry.components))
       || (game.shrine && (!Number.isInteger(game.shrine.x) || !Number.isInteger(game.shrine.y)
@@ -986,7 +966,7 @@ export function useShrine(game, options = {}) {
     game.spellBoosts[chosen.id].minion_damage += 3;
     game.charges[chosen.id] = (game.charges[chosen.id] || 0) + 2;
     game.shrine.uses--;
-    log(game, 'log.shrineEmpowered', { spell: chosen.isRw3 ? chosen.name : textRef(`spells.${chosen.id}.name`) }, 'gold');
+    log(game, 'log.shrineEmpowered', { spell: chosen.name }, 'gold');
     endTurn(game); return true;
   }
   if (type === 'chronomancy') {
