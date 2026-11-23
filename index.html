@@ -1,21 +1,143 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#101713"><meta name="description" content="" data-i18n-content="app.description"><title data-i18n="app.title"></title><link rel="stylesheet" href="./style.css"></head>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0e1512"><meta name="description" content="" data-i18n-content="app.description"><title data-i18n="app.title"></title><link rel="stylesheet" href="./style.css"></head>
 <body>
-<header class="topbar"><a class="brand" href="./" aria-label="" data-i18n-aria-label="nav.wildShockHome"><span class="brand-mark">ϟ</span><span><span data-i18n="app.brand"></span><small data-i18n="nav.aSpellcraftRoguelike"></small></span></a><nav aria-label="" data-i18n-aria-label="nav.mainNavigation"><button class="nav active" id="realm-tab" data-tooltip="" data-i18n-tooltip="nav.returnToTheRealmT" data-i18n="nav.theRealm"></button><button class="nav" id="tree-tab" data-tooltip="" data-i18n-tooltip="nav.spendSkillPointsT"><span data-i18n="nav.skillAtlas"></span> <span>2,304</span></button><button class="nav" id="guide-button" data-tooltip="" data-i18n-tooltip="nav.rulesObjectivesAndControls" data-i18n="nav.fieldGuide"></button></nav><div class="save-label" data-tooltip="" data-i18n-tooltip="nav.progressIsKeptInThisBrowser"><i></i><span id="save-state"></span></div><button class="small-button" id="new-button" data-tooltip="" data-i18n-tooltip="nav.replaceTheCurrentSavedJourney"><span data-i18n="nav.newJourney"></span> <span aria-hidden="true">↗</span></button></header>
+<header class="topbar">
+  <a class="brand" href="./" aria-label="" data-i18n-aria-label="nav.wildShockHome"><span class="brand-mark">ϟ</span><span><span data-i18n="app.brand"></span><small data-i18n="nav.aSpellcraftRoguelike"></small></span></a>
+  <nav aria-label="" data-i18n-aria-label="nav.mainNavigation">
+    <button class="nav active" id="realm-tab" data-tooltip="" data-i18n-tooltip="nav.returnToTheRealmT" data-i18n="nav.theRealm"></button>
+    <button class="nav" id="grimoire-tab" data-tooltip="" data-i18n-tooltip="nav.rw3GrimoireTooltip"><span data-i18n="nav.rw3Grimoire"></span> <span>196</span></button>
+    <button class="nav" id="forge-tab" data-tooltip="" data-i18n-tooltip="nav.rw3ForgeTooltip"><span data-i18n="nav.rw3Forge"></span> <span>365</span></button>
+    <button class="nav" id="guide-button" data-tooltip="" data-i18n-tooltip="nav.rulesObjectivesAndControls" data-i18n="nav.fieldGuide"></button>
+  </nav>
+  <div class="save-label" data-tooltip="" data-i18n-tooltip="nav.progressIsKeptInThisBrowser"><i></i><span id="save-state"></span></div>
+  <button class="small-button" id="new-button" data-tooltip="" data-i18n-tooltip="nav.replaceTheCurrentSavedJourney"><span data-i18n="nav.newJourney"></span> <span aria-hidden="true">↗</span></button>
+</header>
 <div class="language-picker"><label for="language-select" data-i18n="common.language"></label><select id="language-select" aria-label="" data-i18n-aria-label="common.language"></select></div>
 <main>
-<section class="page-heading"><div><div class="eyebrow"><span data-i18n="heading.theFracturedExpanse"></span> <span>/</span> <span data-i18n="heading.journey"></span> <span id="seed-label"></span></div><h1 id="page-title"></h1><p id="page-subtitle"></p></div><div class="realm-counter" data-tooltip="" data-i18n-tooltip="heading.clearARealmToOpenItsRifts"><span id="realm-number">01</span><div><span data-i18n="heading.realm"></span><small data-i18n="heading.of100"></small></div></div></section>
-<section id="realm-view" class="game-layout">
-<aside class="left-panel panel"><div class="panel-heading"><span data-i18n="player.theWayfarer"></span> <span>✧</span></div><div class="portrait"><svg viewBox="0 0 64 64" aria-label="" role="img" data-i18n-aria-label="player.wizard"><path fill="#828d73" d="M27 8h8v8h5v8h6v8H17v-8h5v-8h5z"></path><path fill="#d5d0ae" d="M25 32h13v12H25z"></path><path fill="#495d4c" d="M21 43h23v15H17v-8h4z"></path><path fill="#d6c27e" d="M48 21h4v38h-4zM44 17h12v8H44z"></path><path fill="#202b25" d="M28 35h3v3h-3zM35 35h3v3h-3z"></path></svg><div><h2 data-i18n="player.theRiftwalker"></h2><span id="build-label"></span></div></div><div class="resource" data-tooltip="" data-i18n-tooltip="player.whenVitalityReachesZeroTheJourneyEnds"><label><span data-i18n="player.vitality"></span> <strong id="health-label"></strong></label><div class="bar"><div id="health-bar"></div></div></div><div class="stats-row"><span data-tooltip="" data-i18n-tooltip="player.wardAbsorbsDamageBeforeVitality"><span data-i18n="player.ward"></span> <b id="shield-label">0</b></span><span data-tooltip="" data-i18n-tooltip="player.useTheseToLearnSkillsInTheAtlas"><span data-i18n="player.skillPoints"></span> <b id="points-label">12</b></span></div><button class="atlas-cta" id="atlas-cta" data-tooltip="" data-i18n-tooltip="player.browseSkillsWithoutSpendingATurn"><span data-i18n="player.openTheSkillAtlas"></span> <span>↗</span></button><div class="panel-heading spell-heading"><span data-i18n="player.yourGrimoire"></span> <span id="spell-count"></span></div><div id="spell-list"></div><div class="supplies"><button id="potion-button" data-tooltip="" data-i18n-tooltip="player.potionTooltip"><span class="action-icon potion-icon" aria-hidden="true">⚗</span><div><span data-i18n="player.restorationDraught"></span><small data-i18n="player.restoreHealthChargesP"></small></div><b id="potions-label">3</b></button></div></aside>
-<div class="arena-column"><div class="arena-bar"><span><i></i> <b id="realm-name"></b></span><span id="turn-label"></span></div><div class="canvas-wrap"><canvas id="board" width="736" height="736" tabindex="0" aria-label="" data-i18n-aria-label="realm.accessibleDescription"></canvas><div class="board-key" aria-hidden="true"><span data-i18n="realm.move"></span><b>WASD</b><span data-i18n="realm.cast"></span><b>1–9</b></div><div id="outcome" hidden></div></div><div class="arena-footer"><span id="target-hint"></span><button id="wait-button" data-tooltip="" data-i18n-tooltip="realm.endYourTurnWithoutMovingSpace"><span class="action-icon" aria-hidden="true">◷</span> <span data-i18n="realm.wait"></span> <kbd data-i18n="realm.space"></kbd></button></div><button id="threat-button" aria-pressed="false" data-tooltip="" data-i18n-tooltip="realm.threatTooltip"><span class="action-icon" aria-hidden="true">◉</span> <span data-i18n="realm.showAttackZones"></span> <kbd>Y</kbd></button><div class="touch-controls" aria-label="" data-i18n-aria-label="realm.movementControls"><button data-move="0,-1" aria-label="" data-tooltip="" data-i18n-aria-label="realm.moveUp" data-i18n-tooltip="realm.moveUp">↑</button><button data-move="-1,0" aria-label="" data-tooltip="" data-i18n-aria-label="realm.moveLeft" data-i18n-tooltip="realm.moveLeft">←</button><button data-move="0,1" aria-label="" data-tooltip="" data-i18n-aria-label="realm.moveDown" data-i18n-tooltip="realm.moveDown">↓</button><button data-move="1,0" aria-label="" data-tooltip="" data-i18n-aria-label="realm.moveRight" data-i18n-tooltip="realm.moveRight">→</button></div></div>
-<aside class="right-panel"><div class="panel objective"><div class="eyebrow" data-i18n="objective.yourObjective"></div><h2 data-i18n="objective.silenceTheRealm"></h2><p><span data-i18n="objective.defeatItsInhabitants"></span><br><span data-i18n="objective.chooseARiftGoDeeper"></span></p><div class="enemy-count" data-tooltip="" data-i18n-tooltip="objective.theRiftsOpenAfterEveryHostileIsDefeated"><span id="enemy-count">8</span><div><span data-i18n="objective.hostiles"></span><small data-i18n="objective.remaining"></small></div><span class="enemy-icon" aria-hidden="true">☠</span></div><div class="rift-status" id="rift-status"></div></div><div class="panel inspect-panel"><div class="panel-heading"><span data-i18n="inspection.inspect"></span> <span>⌖</span></div><div id="inspection"></div></div><div class="panel forge-panel"><div class="panel-heading"><span data-i18n="forge.artifactForge"></span> <span id="artifact-count"></span></div><p id="component-stock" class="muted"></p><details><summary><span data-i18n="forge.compendiumCollection"></span> <span id="rw3-catalogue"></span></summary><p id="rw3-inventory" class="muted"></p><p id="rw3-equipment" class="muted"></p><p class="muted" data-i18n="forge.collectionDescription"></p></details><details><summary data-i18n="forge.recipesEquipment"></summary><p class="muted" data-i18n="forge.recipesDescription"></p><div id="artifact-list"></div></details><h3 data-i18n="forge.transmutationShrine"></h3><p id="shrine-state" class="muted"></p><div class="transmutation-controls"><label><span data-i18n="forge.from"></span><select id="material-from"><option value="spark" data-i18n="forge.spark"></option><option value="ember" data-i18n="forge.ember"></option><option value="crystal" data-i18n="forge.crystal"></option></select></label><label><span data-i18n="forge.to"></span><select id="material-to"><option value="crystal" data-i18n="forge.crystal"></option><option value="spark" data-i18n="forge.spark"></option><option value="ember" data-i18n="forge.ember"></option></select></label></div><button id="transmute-button" data-tooltip="" data-i18n-tooltip="forge.transmuteTooltip" data-i18n="forge.transmute1Turn"></button></div><div class="panel journal"><div class="panel-heading"><span data-i18n="chronicle.theChronicle"></span> <span>≡</span></div><div id="log" aria-live="polite"></div></div></aside>
+<section class="page-heading">
+  <div>
+    <div class="eyebrow"><span data-i18n="heading.theFracturedExpanse"></span> <span>/</span> <span data-i18n="heading.journey"></span> <span id="seed-label"></span> <span id="mode-badge" class="mode-badge"></span></div>
+    <h1 id="page-title"></h1>
+    <p id="page-subtitle"></p>
+  </div>
+  <div class="realm-counter" data-tooltip="" data-i18n-tooltip="heading.clearARealmToOpenItsRifts"><span id="realm-number">01</span><div><span data-i18n="heading.realm"></span><small id="realm-total" data-i18n="heading.of100"></small></div></div>
 </section>
-<section id="tree-view" hidden><div class="atlas-toolbar"><div><span class="eyebrow" data-i18n="atlas.theSkillAtlas"></span><h2 data-i18n="atlas.buildYourOwnKindOfImpossible"></h2></div><div class="atlas-summary"><b id="learned-count"></b><span data-i18n="atlas.of2304Learned"></span></div></div><div class="atlas-controls"><input type="search" id="skill-search" placeholder="" aria-label="" data-i18n-aria-label="atlas.searchSkills" data-i18n-placeholder="atlas.searchASkillSchoolOrEffect"><select id="skill-filter" aria-label="" data-i18n-aria-label="atlas.filterSkills"><option value="all" data-i18n="atlas.allSkills"></option><option value="available" data-i18n="atlas.availableToLearn"></option><option value="learned" data-i18n="atlas.learnedSkills"></option></select><span id="atlas-points"></span></div><div id="school-tabs" class="school-tabs"></div><div class="atlas-legend"><span data-i18n="atlas.pathInstructions"></span><span><i class="learned-dot"></i> <span data-i18n="atlas.learned"></span> <i class="available-dot"></i> <span data-i18n="atlas.availableLegend"></span></span></div><div class="tree-scroll"><div id="skill-grid"></div></div><p id="search-results" class="muted"></p></section>
-<footer><span><span data-i18n="app.brand"></span> <span class="footer-dot">✦</span> <span data-i18n="footer.everyTurnIsAChoice"></span></span><span><span data-i18n="footer.100Realms"></span> <span class="footer-dot">·</span> <span data-i18n="footer.12Schools"></span> <span class="footer-dot">·</span> <span data-i18n="footer.2304Possibilities"></span></span></footer>
+
+<section id="realm-view" class="game-layout">
+<aside class="left-panel panel">
+  <div class="panel-heading"><span data-i18n="player.theWayfarer"></span> <span>✧</span></div>
+  <div class="portrait"><svg viewBox="0 0 64 64" aria-label="" role="img" data-i18n-aria-label="player.wizard"><path fill="#828d73" d="M27 8h8v8h5v8h6v8H17v-8h5v-8h5z"></path><path fill="#d5d0ae" d="M25 32h13v12H25z"></path><path fill="#495d4c" d="M21 43h23v15H17v-8h4z"></path><path fill="#d6c27e" d="M48 21h4v38h-4zM44 17h12v8H44z"></path><path fill="#202b25" d="M28 35h3v3h-3zM35 35h3v3h-3z"></path></svg><div><h2 data-i18n="player.theRiftwalker"></h2><span id="build-label"></span></div></div>
+  <div class="resource" data-tooltip="" data-i18n-tooltip="player.whenVitalityReachesZeroTheJourneyEnds"><label><span data-i18n="player.vitality"></span> <strong id="health-label"></strong></label><div class="bar"><div id="health-bar"></div></div></div>
+  <div class="stats-row stats-grid-3">
+    <span data-tooltip="" data-i18n-tooltip="player.shieldsTooltip"><span data-i18n="player.shields"></span> <b id="shields-label" class="cyan-val">0</b></span>
+    <span data-tooltip="" data-i18n-tooltip="player.wardAbsorbsDamageBeforeVitality"><span data-i18n="player.ward"></span> <b id="shield-label">0</b></span>
+    <span data-tooltip="" data-i18n-tooltip="player.useTheseToLearnSkillsInTheAtlas"><span data-i18n="player.skillPoints"></span> <b id="points-label">12</b></span>
+  </div>
+  <div id="status-banners" class="status-banners"></div>
+  <div class="quick-nav-row">
+    <button class="atlas-cta" id="grimoire-cta" data-tooltip="" data-i18n-tooltip="nav.rw3GrimoireTooltip"><span data-i18n="nav.rw3Grimoire"></span> <span>↗</span></button>
+  </div>
+  <div class="panel-heading spell-heading"><span data-i18n="player.yourGrimoire"></span> <span id="spell-count"></span></div>
+  <div id="spell-list"></div>
+  <div class="panel-heading compact-heading"><span data-i18n="player.equippedGear"></span> <span id="allies-badge"></span></div>
+  <div id="equipped-summary" class="equipped-summary"></div>
+  <div class="supplies"><button id="potion-button" data-tooltip="" data-i18n-tooltip="player.potionTooltip"><span class="action-icon potion-icon" aria-hidden="true">⚗</span><div><span data-i18n="player.restorationDraught"></span><small data-i18n="player.restoreHealthChargesP"></small></div><b id="potions-label">3</b></button></div>
+</aside>
+
+<div class="arena-column">
+  <div class="arena-bar"><span><i></i> <b id="realm-name"></b></span><span id="turn-label"></span></div>
+  <div class="canvas-wrap"><canvas id="board" width="736" height="736" tabindex="0" aria-label="" data-i18n-aria-label="realm.accessibleDescription"></canvas><div class="board-key" aria-hidden="true"><span data-i18n="realm.move"></span><b>WASD</b><span data-i18n="realm.cast"></span><b>1–9</b></div><div id="outcome" hidden></div></div>
+  <div class="arena-footer"><span id="target-hint"></span><button id="wait-button" data-tooltip="" data-i18n-tooltip="realm.endYourTurnWithoutMovingSpace"><span class="action-icon" aria-hidden="true">◷</span> <span data-i18n="realm.wait"></span> <kbd data-i18n="realm.space"></kbd></button></div>
+  <button id="threat-button" aria-pressed="false" data-tooltip="" data-i18n-tooltip="realm.threatTooltip"><span class="action-icon" aria-hidden="true">◉</span> <span data-i18n="realm.showAttackZones"></span> <kbd>Y</kbd></button>
+  <div class="touch-controls" aria-label="" data-i18n-aria-label="realm.movementControls"><button data-move="0,-1" aria-label="" data-tooltip="" data-i18n-aria-label="realm.moveUp" data-i18n-tooltip="realm.moveUp">↑</button><button data-move="-1,0" aria-label="" data-tooltip="" data-i18n-aria-label="realm.moveLeft" data-i18n-tooltip="realm.moveLeft">←</button><button data-move="0,1" aria-label="" data-tooltip="" data-i18n-aria-label="realm.moveDown" data-i18n-tooltip="realm.moveDown">↓</button><button data-move="1,0" aria-label="" data-tooltip="" data-i18n-aria-label="realm.moveRight" data-i18n-tooltip="realm.moveRight">→</button></div>
+</div>
+
+<aside class="right-panel">
+  <div class="panel objective">
+    <div class="eyebrow" data-i18n="objective.yourObjective"></div>
+    <h2 data-i18n="objective.silenceTheRealm"></h2>
+    <p><span data-i18n="objective.defeatItsInhabitants"></span><br><span data-i18n="objective.chooseARiftGoDeeper"></span></p>
+    <div class="enemy-count" data-tooltip="" data-i18n-tooltip="objective.theRiftsOpenAfterEveryHostileIsDefeated"><span id="enemy-count">8</span><div><span data-i18n="objective.hostiles"></span><small data-i18n="objective.remaining"></small></div><span class="enemy-icon" aria-hidden="true">☠</span></div>
+    <div class="rift-status" id="rift-status"></div>
+  </div>
+  <div class="panel inspect-panel"><div class="panel-heading"><span data-i18n="inspection.inspect"></span> <span>⌖</span></div><div id="inspection"></div></div>
+  <div class="panel forge-panel">
+    <div class="panel-heading"><span data-i18n="nav.rw3Forge"></span> <span id="rw3-catalogue"></span></div>
+    <p id="rw3-inventory" class="muted"></p>
+    <p id="rw3-equipment" class="muted"></p>
+    <button class="atlas-cta" id="open-forge-cta"><span data-i18n="nav.rw3Forge"></span> <span>↗</span></button>
+    <h3 id="shrine-title" data-i18n="shrine.transmutation"></h3>
+    <p id="shrine-state" class="muted"></p>
+    <div id="shrine-special-box">
+      <p id="shrine-special-desc" class="muted"></p>
+      <select id="shrine-special-select" hidden></select>
+      <button id="shrine-activate-button" data-i18n="shrine.useButton"></button>
+    </div>
+  </div>
+  <div class="panel journal"><div class="panel-heading"><span data-i18n="chronicle.theChronicle"></span> <span>≡</span></div><div id="log" aria-live="polite"></div></div>
+</aside>
+</section>
+
+<section id="grimoire-view" hidden>
+  <div class="atlas-toolbar">
+    <div><span class="eyebrow" data-i18n="nav.rw3Grimoire"></span><h2 data-i18n="rw3.grimoireTitle"></h2><p class="muted" data-i18n="rw3.grimoireSubtitle"></p></div>
+    <div class="atlas-summary"><b id="rw3-learned-count">0</b><span id="rw3-grimoire-points"></span></div>
+  </div>
+  <div class="atlas-controls">
+    <input type="search" id="rw3-spell-search" placeholder="" data-i18n-placeholder="rw3.searchSpells">
+    <select id="rw3-tag-filter"></select>
+    <select id="rw3-level-filter"></select>
+    <select id="rw3-status-filter">
+      <option value="all" data-i18n="atlas.allSkills"></option>
+      <option value="learned" data-i18n="rw3.learnedOnly"></option>
+      <option value="available" data-i18n="rw3.availableOnly"></option>
+    </select>
+  </div>
+  <div id="rw3-spell-grid" class="rw3-grid"></div>
+</section>
+
+<section id="forge-view" hidden>
+  <div class="atlas-toolbar">
+    <div><span class="eyebrow" data-i18n="nav.rw3Forge"></span><h2 data-i18n="rw3.forgeTitle"></h2><p class="muted" data-i18n="rw3.forgeSubtitle"></p></div>
+    <div class="atlas-summary"><b id="rw3-craftable-count">0</b><span data-i18n="rw3.craftableOnly"></span></div>
+  </div>
+  <div class="panel rw3-satchel-panel">
+    <div class="panel-heading"><span id="rw3-satchel-title"></span><span>✦</span></div>
+    <div id="rw3-satchel-chips" class="chip-wrap"></div>
+  </div>
+  <div class="atlas-controls">
+    <input type="search" id="rw3-eq-search" placeholder="" data-i18n-placeholder="rw3.searchEquipment">
+    <select id="rw3-slot-filter"></select>
+    <select id="rw3-eq-status-filter">
+      <option value="all" data-i18n="atlas.allSkills"></option>
+      <option value="craftable" data-i18n="rw3.craftableOnly"></option>
+    </select>
+  </div>
+  <div id="rw3-eq-grid" class="rw3-grid"></div>
+</section>
+
+<footer><span><span data-i18n="app.brand"></span> <span class="footer-dot">✦</span> <span data-i18n="footer.everyTurnIsAChoice"></span></span><span><span data-i18n="nav.rw3Grimoire"></span> (196) <span class="footer-dot">·</span> <span data-i18n="nav.rw3Forge"></span> (365)</span></footer>
 </main>
 <dialog id="detail-dialog"><button class="close-dialog" aria-label="" data-i18n-aria-label="common.close">×</button><div id="detail-content"></div></dialog>
 <dialog id="guide-dialog"><button class="close-dialog" aria-label="" data-i18n-aria-label="guide.close">×</button><div class="eyebrow" data-i18n="guide.fieldGuide"></div><h2><span data-i18n="guide.aLittleKnowledge"></span><br><span data-i18n="guide.aLongerLife"></span></h2><p data-i18n="guide.introduction"></p><dl><dt data-i18n="guide.moveStrike"></dt><dd data-i18n="guide.move.description"></dd><dt data-i18n="guide.castASpell"></dt><dd data-i18n="guide.cast.description"></dd><dt data-i18n="guide.recover"></dt><dd data-i18n="guide.recover.description"></dd><dt data-i18n="guide.learn"></dt><dd data-i18n="guide.learn.description"></dd><dt data-i18n="guide.chooseARift"></dt><dd data-i18n="guide.rift.description"></dd><dt data-i18n="guide.craftArtifacts"></dt><dd data-i18n="guide.craft.description"></dd><dt data-i18n="guide.transmute"></dt><dd data-i18n="guide.transmute.description"></dd><dt data-i18n="guide.scout"></dt><dd data-i18n="guide.scout.description"></dd><dt data-i18n="guide.survive"></dt><dd data-i18n="guide.survive.description"></dd></dl><p class="muted" data-i18n="guide.storage"></p></dialog>
-<dialog id="new-dialog"><div class="eyebrow" data-i18n="journey.aNewBeginning"></div><h2 data-i18n="journey.stepIntoAnotherRift"></h2><p data-i18n="journey.confirmDescription"></p><label class="seed-input"><span data-i18n="journey.worldSeedOptional"></span><input id="new-seed" type="number" min="0" max="2147483647" placeholder="" data-i18n-placeholder="journey.randomWorld"></label><div class="dialog-actions"><button id="cancel-new" data-i18n="journey.keepExploring"></button><button class="primary" id="confirm-new" data-i18n="journey.beginJourney"></button></div></dialog>
+<dialog id="new-dialog">
+  <div class="eyebrow" data-i18n="journey.aNewBeginning"></div>
+  <h2 data-i18n="journey.stepIntoAnotherRift"></h2>
+  <p data-i18n="journey.confirmDescription"></p>
+  <label class="seed-input"><span data-i18n="journey.modeLabel"></span>
+    <select id="new-mode">
+      <option value="standard" data-i18n="mode.standard"></option>
+      <option value="rw3" data-i18n="mode.rw3"></option>
+      <option value="trial-pyromancer" data-i18n="mode.trial-pyromancer"></option>
+      <option value="trial-necromancer" data-i18n="mode.trial-necromancer"></option>
+      <option value="trial-stormcaller" data-i18n="mode.trial-stormcaller"></option>
+      <option value="trial-conjurer" data-i18n="mode.trial-conjurer"></option>
+      <option value="trial-ironman" data-i18n="mode.trial-ironman"></option>
+    </select>
+  </label>
+  <label class="seed-input"><span data-i18n="journey.worldSeedOptional"></span><input id="new-seed" type="number" min="0" max="2147483647" placeholder="" data-i18n-placeholder="journey.randomWorld"></label>
+  <div class="dialog-actions"><button id="cancel-new" data-i18n="journey.keepExploring"></button><button class="primary" id="confirm-new" data-i18n="journey.beginJourney"></button></div>
+</dialog>
 <script type="module" src="./src/app.js"></script>
 </body></html>

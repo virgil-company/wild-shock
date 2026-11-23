@@ -44,3 +44,57 @@ button:focus-visible,a:focus-visible,canvas:focus-visible{outline-color:var(--fo
 #threat-button{width:calc(100% - 20px);margin:10px;border-color:#536d54;background:#17241b;text-align:left}#threat-button[aria-pressed="true"]{background:#3b2421;box-shadow:inset 3px 0 #ef796b}
 .touch-controls button{background:#1d2b20;border-color:#435b44;color:#d9e7c5;font-size:18px}.enemy-icon{color:#e88d78;text-shadow:0 0 15px #ef8f7a70}
 @media(max-width:700px){.board-key{display:none}[data-tooltip]::after{display:none}.arena-footer button{padding:5px}.small-button{padding:9px 10px}}
+
+
+/* Stitch MCP Design System — Rift Wizard 3 Edition */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap');
+:root{--bg:#0e1512;--panel:#1a211e;--panel-low:#161d1a;--panel-high:#242c28;--line:#4d4639;--text:#dde4df;--muted:#b9b2a4;--gold:#e5c27b;--cyan:#7bd0ff;--crimson:#f87171;--green:#86efac}
+h1,h2,h3{font-family:'Playfair Display','Space Grotesk',serif}
+.realm-counter>span,.enemy-count>span:first-child,.stats-row b,.spell>small,.tag-pill,.res-badge,.status-chip{font-family:'JetBrains Mono',monospace}
+.cyan-val{color:var(--cyan)!important}
+.mode-badge{display:inline-block;padding:2px 7px;border:1px solid var(--line);background:#242c28;color:var(--gold);font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1px;border-radius:3px;vertical-align:middle}
+.mode-badge:empty{display:none}
+.stats-grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;text-align:left}
+.stats-grid-3>span{background:var(--panel-low);border:1px solid #303932;padding:7px 6px;border-radius:3px}
+.stats-grid-3 b{display:block;margin:4px 0 0;font-size:14px}
+.status-banners{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+.status-banners:empty{display:none}
+.banner-chip{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:7px 9px;font-size:10px;border-radius:3px;border:1px solid var(--line);background:#202a24}
+.banner-chip.quickstep{border-color:var(--cyan);color:var(--cyan)}
+.banner-chip.channel{border-color:var(--gold);color:var(--gold)}
+.banner-chip button{padding:2px 6px;font-size:9px;border-color:var(--gold);color:var(--gold)}
+.quick-nav-row{display:flex;flex-direction:column;gap:6px}
+.compact-heading{margin:18px 0 8px}
+.equipped-summary{display:flex;flex-direction:column;gap:4px;font-size:10px}
+.eq-slot-row{display:flex;justify-content:space-between;gap:6px;padding:4px 7px;background:var(--panel-low);border:1px solid #2b342d;border-radius:3px}
+.eq-slot-row span{color:var(--muted)}
+.eq-slot-row strong{color:var(--gold);font-weight:500;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rw3-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(285px,1fr));gap:14px;margin-bottom:36px}
+.rw3-card{background:linear-gradient(155deg,var(--panel),var(--panel-low));border:1px solid var(--line);padding:15px;display:flex;flex-direction:column;gap:9px;border-radius:4px;transition:border-color .15s,transform .15s}
+.rw3-card:hover{border-color:var(--gold)}
+.rw3-card.learned-card{border-color:#5d8a64;background:linear-gradient(155deg,#1d2b22,#141e18)}
+.rw3-card.craftable-card{border-color:var(--gold);box-shadow:0 0 18px #e5c27b18}
+.rw3-card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.rw3-card-head h3{margin:0;font-size:16px;color:var(--text)}
+.rw3-lvl{font-family:'JetBrains Mono',monospace;font-size:10px;padding:2px 6px;background:var(--panel-high);border:1px solid var(--line);color:var(--gold);border-radius:3px;white-space:nowrap}
+.chip-wrap{display:flex;flex-wrap:wrap;gap:5px}
+.tag-pill{font-size:9px;padding:2px 6px;border-radius:3px;border:1px solid #3d463e;background:#121915;letter-spacing:.4px}
+.rw3-desc{margin:0;font-size:11px;color:var(--muted);line-height:1.55;white-space:pre-line}
+.rw3-stats-line{font-family:'JetBrains Mono',monospace;font-size:10px;color:#c9d6c2;display:flex;flex-wrap:wrap;gap:8px}
+.rw3-card-actions{margin-top:auto;display:flex;gap:8px;padding-top:8px;border-top:1px solid #2b352d}
+.rw3-card-actions button{flex:1;padding:7px 10px;font-size:11px;border-radius:3px}
+.rw3-satchel-panel{padding:14px 16px;margin-bottom:18px}
+.rw3-satchel-panel .chip-wrap{margin-top:10px}
+.upgrade-list{display:flex;flex-direction:column;gap:10px;margin-top:14px;max-height:42vh;overflow:auto}
+.upgrade-item{padding:11px;border:1px solid #354137;background:var(--panel-low);border-radius:4px}
+.upgrade-item.learned{border-color:#5d8a64;background:#1b2a20}
+.upgrade-item-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:5px}
+.upgrade-item button{margin-top:8px;padding:6px 12px;font-size:11px}
+.res-grid{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.res-badge{font-size:9px;padding:2px 5px;border-radius:3px;border:1px solid #3b463d;background:#131b16}
+.res-badge.immune{border-color:var(--cyan);color:var(--cyan)}
+.res-badge.weak{border-color:var(--crimson);color:var(--crimson)}
+.status-chip{font-size:9px;padding:2px 5px;border-radius:3px;background:#2f251e;border:1px solid #75593f;color:#f3cf98}
+#shrine-special-box{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+#shrine-activate-button{padding:8px 12px;border:1px solid var(--gold);color:var(--gold);border-radius:4px}
+#open-forge-cta{margin-top:8px}
