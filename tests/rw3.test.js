@@ -17,7 +17,7 @@ function cleanArena(mode = 'standard') {
 }
 
 test('the local compendium catalogue has the complete public build counts', () => {
-  assert.deepEqual(catalogueCounts(), { spells: 196, equipment: 365, components: 93 });
+  assert.deepEqual(catalogueCounts(), { spells: 198, equipment: 375, components: 94 });
 });
 
 test('tag recipes use each supplied component once and equipped items replace their slot', () => {
@@ -136,7 +136,7 @@ test('Clouds persist and apply effects, and Component on_pickup / on_craft trigg
 
 test('All five Shrine types work and Archmage Trials restrict spell pools & campaign length', () => {
   const g = cleanArena('trial-pyromancer');
-  assert.equal(finalRealmOf(g), 20);
+  assert.equal(finalRealmOf(g), 21);
   assert.equal(g.potions, 0);
   g.points = 20;
   // Pyromancer trial allows Fire spells (Fireball already known; Eye of Fire id 52) but blocks pure Ice (Freeze id 67)

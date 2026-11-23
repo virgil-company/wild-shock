@@ -1,3 +1,4 @@
+import { outfitColor } from './campaign.js';
 // Handcrafted SVG & Canvas 2D Visual Asset Library for Wild Shock — Rift Wizard 3 Edition
 // Designed with warm, expressive, crisp dark-arcane fantasy illustration aesthetics.
 
@@ -427,7 +428,24 @@ export function drawCanvasItem(ctx, item, tile, time) {
   ctx.ellipse(cx, cy + 10, 7, 3, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  if (item.type === 'potion') {
+  if (['chest', 'scroll', 'tome', 'companion'].includes(item.type)) {
+    ctx.translate(cx, cy + bob);
+    ctx.fillStyle = { chest: '#bb783e', scroll: '#fae4ac', tome: '#8861bf', companion: '#459b8c' }[item.type];
+    if (item.type === 'companion') {
+      ctx.fillRect(-6, 0, 12, 10);
+      ctx.fillStyle = '#f5dbad'; ctx.fillRect(-4, -8, 8, 8);
+      ctx.fillStyle = '#a7f3d0'; ctx.fillRect(6, -4, 2, 13);
+    } else if (item.type === 'chest') {
+      ctx.fillRect(-9, -5, 18, 13);
+      ctx.fillStyle = '#55341e'; ctx.fillRect(-9, 0, 18, 2);
+      ctx.fillStyle = '#ffde84'; ctx.fillRect(-2, -1, 4, 5);
+    } else {
+      ctx.fillRect(-7, -9, 14, 18);
+      ctx.fillStyle = item.type === 'scroll' ? '#927044' : '#ebcbff';
+      ctx.fillRect(-5, -4, 9, 2); ctx.fillRect(-5, 1, 7, 2);
+      if (item.type === 'tome') ctx.fillRect(-6, -9, 2, 18);
+    }
+  } else if (item.type === 'potion') {
     // Ruby Restoration Flask
     ctx.fillStyle = '#d4a373';
     ctx.fillRect(cx - 2.5, cy - 10 + bob, 5, 3);
@@ -512,7 +530,8 @@ export function drawCanvasWizard(ctx, player, tile, time) {
   ctx.fill();
 
   // Robe body
-  ctx.fillStyle = '#254235';
+  const outfit = outfitColor(player.outfit);
+  ctx.fillStyle = outfit?.robe || '#254235';
   ctx.strokeStyle = '#e5c27b';
   ctx.lineWidth = 1.3;
   ctx.beginPath();
@@ -534,7 +553,7 @@ export function drawCanvasWizard(ctx, player, tile, time) {
   ctx.fillRect(cx + 0.8, cy - 3 + bob, 2.2, 1.8);
 
   // Pointed Wizard Hat
-  ctx.fillStyle = '#2e4e3f';
+  ctx.fillStyle = outfit?.hat || '#2e4e3f';
   ctx.strokeStyle = '#ffdf9f';
   ctx.lineWidth = 1.2;
   ctx.beginPath();

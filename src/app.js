@@ -1,14 +1,17 @@
+import { wardrobe } from './rw3-catalog.js';
+import { outfitUnlocks } from './campaign.js';
+import { units, covers, searchCatalogue } from './bestiary.js';
 import { schoolName, enemyName, componentName, equipmentName, logText } from './game-text.js';
 import { t, getLocale, setLocale, translatePage, localeOptions } from './i18n.js';
 import {
-  forge, useShrine, threateningEnemies, previewPortal, SIZE,
+  deploy, claimReward, rerollRifts, forge, useShrine, threateningEnemies, previewPortal, SIZE,
   createGame, availableSpells, maxHealth, finalRealmOf, distance, hasSight, shortestPath,
   learnRw3Spell, learnRw3Upgrade, move, cast, wait, cancelChannel, drink, serialize, restore,
 } from './engine.js';
 import {
   catalogueCounts, equipmentSlots, rw3Spells, rw3Equipment, rw3Tags,
-  spellById, componentByName, canLearnRw3Spell, canLearnRw3Upgrade,
-  effectiveRw3Spell, findMatchingComponents, craftableEquipment, getEquipmentModifiers,
+  transmutationChoices, knownSpellIds, spellById, componentByName, canLearnRw3Spell, canLearnRw3Upgrade,
+  equipmentByName, canForge, effectiveRw3Spell, findMatchingComponents, craftableEquipment, getEquipmentModifiers,
   getUnitResistance, DAMAGE_TYPES, TAG_META, CLOUD_TYPES,
 } from './rw3.js';
 import {
@@ -20,11 +23,19 @@ import {
 const $ = id => document.getElementById(id);
 const escapeHtml = value => String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 const h = (key, params) => escapeHtml(t(key, params));
-const SAVE_KEY = 'wild-shock-v1';
+const SAVE_KEY = 'wild-shock-v2';
 let storageAvailable = true, saved;
 try { saved = localStorage.getItem(SAVE_KEY); } catch { storageAvailable = false; }
 let game = restore(saved) || createGame();
+const PROFILE_KEY = 'wild-shock-wardrobe-v1';
+let profile = { outfits: ['Wizard'], selected: 'Wizard', mutators: [], defeated: [] };
+try {
+  const stored = JSON.parse(localStorage.getItem(PROFILE_KEY));
+  if (Array.isArray(stored?.outfits)) profile = { ...profile, ...stored };
+} catch { /* The current journey remains playable without profile storage. */ }
+function saveProfile() { try { localStorage.setItem(PROFILE_KEY, JSON.stringify(profile)); } catch { storageAvailable = false; } }
 let detailRw3SpellId = null, inspectionTarget = null;
+let logTurn = null;
 let selected = null, hover = null, view = 'realm', showThreats = false;
 
 const canvas = $('board'), ctx = canvas.getContext('2d'), tile = canvas.width / SIZE;
@@ -33,6 +44,8 @@ language.replaceChildren(...localeOptions.map(({ value, label }) => new Option(l
 language.value = getLocale(); language.onchange = () => setLocale(language.value);
 document.addEventListener('localechange', () => {
   populateFilters();
+  if ($('bestiary-dialog').open) renderBestiary();
+  if ($('guide-dialog').open) showWardrobe();
   renderHeading(); render();
   if ($('detail-dialog').open && detailRw3SpellId != null) showRw3SpellDetail(detailRw3SpellId);
 });
@@ -56,6 +69,7 @@ function cleanRw3Desc(text) {
 }
 
 function draw(time = performance.now()) {
+  time *= profile.speed || 1;
   ctx.fillStyle = '#09100d';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -126,8 +140,18 @@ function draw(time = performance.now()) {
     }
   }
 
+  const threatening = showThreats && hover ? new Set(threateningEnemies(game, hover)) : null;
   // Enemies & Spawners
   for (const enemy of game.enemies) {
+    if (enemy.radius) {
+      const side = (enemy.radius * 2 + 1) * tile;
+      ctx.fillStyle = 'rgba(248, 113, 113, 0.16)';
+      ctx.fillRect((enemy.x - enemy.radius) * tile, (enemy.y - enemy.radius) * tile, side, side);
+      ctx.strokeStyle = '#c58a66'; ctx.strokeRect((enemy.x - enemy.radius) * tile, (enemy.y - enemy.radius) * tile, side, side);
+    }
+    if (threatening?.has(enemy)) {
+      ctx.strokeStyle = '#ffdf9f'; ctx.lineWidth = 2; ctx.strokeRect(enemy.x * tile + 1, enemy.y * tile + 1, tile - 2, tile - 2);
+    }
     drawCanvasEnemy(ctx, enemy, tile, time);
     if (enemy.isSpawner) {
       ctx.fillStyle = 'rgba(9, 16, 13, 0.85)';
@@ -202,8 +226,33 @@ function save() {
   $('save-state').textContent = t(storageAvailable ? 'save.available' : 'save.unavailable');
 }
 
+function equippedLabel(slot) {
+  return Object.values(game.equipment).filter(e => equipmentByName.get(e.name)?.slot === slot).map(e => equipmentName(e.name)).join(', ');
+}
+
 function render() {
+  if (game.mode === 'trial-improviser' && game.status !== 'playing' && !game.resultRecorded) {
+    profile.improviserWins = game.status === 'won' ? (profile.improviserWins || 0) + 1 : 0;
+    game.resultRecorded = true;
+    if (profile.improviserWins >= 10 && !profile.outfits.includes('Unquenchable Flame')) profile.outfits.push('Unquenchable Flame');
+    saveProfile();
+  }
+  const earned = outfitUnlocks(game).filter(name => !profile.outfits.includes(name));
+  const discovered = game.defeatedSpecies.filter(n => !profile.defeated.includes(n));
+  if (earned.length || discovered.length) { profile.outfits.push(...earned); profile.defeated.push(...discovered); saveProfile(); }
+  game.player.outfit = profile.selected;
+  const reward = game.pendingReward;
+  if (reward && game.status === 'playing') {
+    $('reward-options').replaceChildren(...reward.options.map(choice => {
+      const button = document.createElement('button');
+      button.textContent = reward.type === 'scroll' ? spellById.get(choice).name : equipmentName(choice);
+      button.onclick = () => { if (claimReward(game, choice)) { $('reward-dialog').close(); render(); } };
+      return button;
+    }));
+    if (!$('reward-dialog').open) $('reward-dialog').showModal();
+  }
   const maxR = finalRealmOf(game);
+  $('spell-total').textContent = rw3Spells.length; $('equipment-total').textContent = rw3Equipment.length;
   $('seed-label').textContent = `#${String(game.seed).slice(-6).padStart(6, '0')}`;
   $('mode-badge').textContent = game.mode && game.mode !== 'standard' ? t(`mode.${game.mode}`).split('(')[0].trim() : '';
   $('health-label').textContent = `${game.player.hp} / ${maxHealth(game)}`;
@@ -215,11 +264,13 @@ function render() {
   $('realm-number').textContent = String(game.realm).padStart(2, '0');
   $('realm-total').textContent = t('realm.ofTotal', { total: maxR });
   $('turn-label').textContent = t('realm.turn', { turn: String(game.turn + 1).padStart(3, '0') });
-  $('realm-name').textContent = t(game.theme ? 'realm.emberfall' : 'realm.mossbound');
+  $('realm-name').textContent = game.vault ? t('vault.name', { name: game.vault }) : t(game.theme ? 'realm.emberfall' : 'realm.mossbound');
   $('enemy-count').textContent = game.enemies.length;
+  $('reroll-rifts').textContent = t('rift.reroll', { count: game.rerolls });
+  $('reroll-rifts').disabled = game.status !== 'playing' || !game.rerolls || game.realm >= maxR;
   $('rift-status').textContent = t(game.enemies.length ? 'realm.sealed' : 'realm.open');
   $('potion-button').disabled = !game.potions || game.status !== 'playing';
-  $('wait-button').disabled = game.status !== 'playing';
+  $('wait-button').disabled = game.status !== 'playing' || game.deploying;
 
   // Status banners (Quickstep, Channeling, Active Buffs)
   const mods = getEquipmentModifiers(game);
@@ -229,7 +280,7 @@ function render() {
     const chSpell = availableSpells(game).find(s => s.id === game.channel.spellId);
     banners.push(`<div class="banner-chip channel"><span>❂ ${h('player.channeling', { spell: chSpell?.name || '', turns: game.channel.turnsLeft })}</span><button id="cancel-channel-btn">${h('player.cancelChannel')}</button></div>`);
   }
-  for (const buff of game.buffs || []) banners.push(`<div class="banner-chip"><span>✦ ${escapeHtml(buff.name)}</span><small>${buff.duration}t</small></div>`);
+  for (const buff of game.buffs || []) banners.push(`<div class="banner-chip"><span>✦ ${escapeHtml(buff.name)}</span><small>${buff.duration < 0 ? "∞" : buff.duration + "t"}</small></div>`);
   $('status-banners').innerHTML = banners.join('');
   if ($('cancel-channel-btn')) $('cancel-channel-btn').onclick = () => { cancelChannel(game); render(); };
 
@@ -251,11 +302,17 @@ function render() {
 
   $('allies-badge').textContent = (game.allies || []).length ? `${t('player.allies')}: ${game.allies.length}` : '';
   $('equipped-summary').innerHTML = equipmentSlots.map(slot => {
-    const item = game.equipment?.[slot]?.name;
-    return `<div class="eq-slot-row"><span class="eq-slot-label">${slotIconSvg(slot, 15)}<span>${h(`slots.${slot.toLowerCase()}`)}</span></span><strong>${item ? escapeHtml(equipmentName(item)) : '—'}</strong></div>`;
+    const item = equippedLabel(slot);
+    return `<div class="eq-slot-row"><span class="eq-slot-label">${slotIconSvg(slot, 15)}<span>${h(`slots.${slot.toLowerCase()}`)}</span></span><strong>${item ? escapeHtml(item) : '—'}</strong></div>`;
   }).join('');
 
-  $('log').replaceChildren(...game.log.slice(0, 14).map(entry => {
+  const turns = [...new Set(game.log.map(entry => entry.turn))];
+  if (!turns.includes(logTurn)) logTurn = null;
+  const index = logTurn === null ? 0 : turns.indexOf(logTurn);
+  $('older-turn').disabled = index >= turns.length - 1;
+  $('newer-turn').disabled = logTurn === null;
+  const entries = logTurn === null ? game.log.slice(0, 14) : game.log.filter(e => e.turn === logTurn);
+  $('log').replaceChildren(...entries.map(entry => {
     const row = document.createElement('div');
     row.className = ['gold', 'red', 'green'].includes(entry.tone) ? entry.tone : '';
     const timeEl = document.createElement('time');
@@ -288,7 +345,7 @@ function render() {
 
 function updateHint(key) {
   const spell = availableSpells(game).find(s => s.id === selected);
-  $('target-hint').textContent = key ? t(key) : spell ? t('hint.target', { spell: spell.name }) : t('hint.move');
+  $('target-hint').textContent = game.deploying ? t('realm.deploy') : key ? t(key) : spell ? t('hint.target', { spell: spell.name }) : t('hint.move');
 }
 function action(fn) {
   const done = fn();
@@ -300,7 +357,7 @@ function renderForge() {
   const craftable = craftableEquipment(game).length;
   $('rw3-catalogue').textContent = `${craftable} / ${catalogueCounts().equipment}`;
   $('rw3-inventory').textContent = game.rw3Components.length ? game.rw3Components.map(componentName).join(' · ') : t('forge.empty');
-  $('rw3-equipment').textContent = equipmentSlots.map(slot => `${t(`slots.${slot.toLowerCase()}`)}: ${game.equipment?.[slot]?.name ? equipmentName(game.equipment[slot].name) : '—'}`).join(' · ');
+  $('rw3-equipment').textContent = equipmentSlots.map(slot => `${t(`slots.${slot.toLowerCase()}`)}: ${equippedLabel(slot) || '—'}`).join(' · ');
 
   const shrine = game.shrine, near = shrine && distance(game.player, shrine) <= 1;
   const sType = shrine?.type || 'transmutation';
@@ -309,20 +366,48 @@ function renderForge() {
   $('shrine-state').textContent = shrine ? t('forge.shrineState', { uses: shrine.uses, reach: t(near ? 'forge.near' : 'forge.far') }) : t('forge.noShrine');
   $('shrine-special-desc').textContent = sType === 'transmutation' ? t('inspection.shrineDescription', { uses: shrine?.uses ?? 0 }) : t(`shrine.${sType}Desc`);
   const sel = $('shrine-special-select');
-  if (sType === 'transmutation' || sType === 'duplication') {
+  if (['transmutation', 'duplication', 'offering', 'knowledge'].includes(sType)) {
     sel.hidden = false;
     sel.innerHTML = game.rw3Components.length ? [...new Set(game.rw3Components)].map(c => `<option value="${escapeHtml(c)}">${escapeHtml(componentName(c))}</option>`).join('') : `<option value="">—</option>`;
     $('shrine-activate-button').disabled = game.status !== 'playing' || !near || !shrine?.uses || !game.rw3Components.length;
-  } else if (sType === 'empowerment') {
+  } else if (sType === 'reformation') {
     sel.hidden = false;
-    const spells = availableSpells(game);
+    const slots = Object.keys(game.equipment).filter(slot => game.equipment[slot].components.length);
+    sel.replaceChildren(...slots.map(slot => new Option(equipmentName(game.equipment[slot].name), slot)));
+    $('shrine-activate-button').disabled = game.status !== 'playing' || !near || !shrine?.uses || !slots.length;
+  } else if (['empowerment', 'haste', 'spellgraft'].includes(sType)) {
+    sel.hidden = false;
+    const spells = availableSpells(game).filter(s => sType !== 'haste' || !s.quickCast);
     sel.innerHTML = spells.map(s => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)}</option>`).join('');
     $('shrine-activate-button').disabled = game.status !== 'playing' || !near || !shrine?.uses || !spells.length;
   } else {
     sel.hidden = true;
     $('shrine-activate-button').disabled = game.status !== 'playing' || !near || !shrine?.uses;
   }
+  renderShrineResult();
   $('threat-button').setAttribute('aria-pressed', String(showThreats));
+}
+
+function renderShrineResult() {
+  const name = $('shrine-special-select').value, select = $('shrine-result');
+  const offering = game.shrine?.type === 'offering';
+  const graft = game.shrine?.type === 'spellgraft';
+  const choices = graft ? rw3Tags.filter(tag => !availableSpells(game).find(s => s.id === name)?.tags.includes(tag)) : offering ? (componentByName.get(name)?.tags || []) : transmutationChoices(name).map(c => c.name);
+  select.hidden = !['spellgraft', 'offering', 'transmutation'].includes(game.shrine?.type) || !choices.length;
+  if (!select.hidden) select.replaceChildren(...choices.map(value => new Option(offering || graft ? value : componentName(value), value)));
+}
+
+function renderBestiary() {
+  const list = $('unit-select'), previous = list.value;
+  const matches = [...units.values()].filter(u => (!$('unit-discovered').checked || profile.defeated.includes(u.name)) && searchCatalogue($('unit-search').value, [u.name, ...u.tags, u.is_boss ? 'boss' : '', ...u.abilities.map(a => a.name)]));
+  list.replaceChildren(...matches.map(u => new Option(u.name, u.name)));
+  if (matches.some(u => u.name === previous)) list.value = previous;
+  else list.selectedIndex = 0;
+  showUnit();
+}
+function showUnit() {
+  const unit = units.get($('unit-select').value);
+  $('unit-detail').innerHTML = unit ? `<h3>${escapeHtml(unit.name)}</h3><p>${unit.hp} HP · ${unit.shields} SH · ${escapeHtml(unit.tags.join(' / '))}</p>${renderResistances({ resistances: unit.resists })}<dl>${unit.abilities.map(a => `<dt>${escapeHtml(a.name)}</dt><dd>${escapeHtml([a.damage ? a.damage + ' ' + a.damage_type.join('/') : '', a.range ? 'R' + a.range : '', cleanRw3Desc(a.desc)].filter(Boolean).join(' · '))}</dd>`).join('')}</dl>${unit.passives.map(p => `<p>${escapeHtml(cleanRw3Desc(p))}</p>`).join('')}` : h('bestiary.empty');
 }
 
 function renderResistances(unit) {
@@ -342,22 +427,24 @@ function renderStatuses(unit) {
 
 function inspect(p) {
   inspectionTarget = p;
-  const enemy = p && game.enemies.find(e => distance(e, p) === 0);
+  const enemy = p && game.enemies.find(e => covers(e, p));
   const ally = p && (game.allies || []).find(a => distance(a, p) === 0);
   const cloud = p && (game.clouds || []).find(c => c.x === p.x && c.y === p.y);
   if (enemy) {
     const nextAction = enemy.isSpawner ? t('inspection.spawnerDesc', { cooldown: enemy.spawnCooldown })
       : enemy.statuses.freeze || enemy.statuses.stun || enemy.statuses.petrify ? t('inspection.frozen')
       : distance(enemy, game.player) <= enemy.range && hasSight(game, enemy, game.player) ? t('inspection.attack') : t('inspection.approach');
-    const title = enemy.isSpawner ? t('inspection.spawner') : enemy.isFinalBoss ? 'Mordred' : enemyName(enemy);
+    const title = enemy.isSpawner ? t('inspection.spawner') : enemy.species || (enemy.isFinalBoss ? 'Mordred' : enemyName(enemy));
     const iconKey = enemy.isSpawner ? 'lair' : enemy.isFinalBoss ? 'mordred' : enemy.boss ? 'boss' : ['imp', 'knight', 'eye', 'moth'][enemy.type];
     $('inspection').innerHTML = `<div class="inspect-head"><div class="inspect-symbol">${entityIconSvg(iconKey, 34)}</div><div><h3>${escapeHtml(title)}${enemy.shields ? ` <span class="cyan-val">[${enemy.shields} SH]</span>` : ''}</h3><p style="margin:2px 0 0;color:var(--gold)">${escapeHtml(nextAction)}</p></div></div><p>${h('inspection.enemyStats', enemy)}</p>${renderResistances(enemy)}${renderStatuses(enemy)}`;
   } else if (ally) {
     $('inspection').innerHTML = `<div class="inspect-head"><div class="inspect-symbol">${entityIconSvg('ally', 34)}</div><div><h3>${escapeHtml(ally.name)}</h3><p style="margin:2px 0 0;color:var(--green)">${h('inspection.ally')}</p></div></div><p>HP ${ally.hp}/${ally.maxHp} · DMG ${ally.damage} · R${ally.range}${ally.shields ? ` · ${ally.shields} SH` : ''}${ally.duration ? ` · ${ally.duration}t` : ''}</p>${renderResistances(ally)}`;
   } else if (p && game.portals.some(r => distance(r, p) === 0)) {
-    const portal = game.portals.find(r => distance(r, p) === 0), next = previewPortal(game, portal.theme);
+    const portal = game.portals.find(r => distance(r, p) === 0), next = previewPortal(game, portal);
     const preview = next ? [
       h('inspection.nextRealm', { enemies: next.enemies, boss: next.boss ? t('inspection.boss') : '' }),
+      next.vault ? h('vault.name', { name: next.vault }) : '',
+      escapeHtml(next.species.join(', ')),
       h('inspection.affinities', { schools: next.schools.map(schoolName).join(', ') }),
       h('inspection.shrines', { shrines: t(`shrine.${next.shrine}`) }),
       next.rw3Components?.length ? `RW3: ${next.rw3Components.map(componentName).join(', ')}` : '',
@@ -370,8 +457,8 @@ function inspect(p) {
     const item = game.items.find(i => distance(i, p) === 0);
     const comp = item.type === 'rw3-component' ? componentByName.get(item.name) : null;
     const iconKey = item.type === 'potion' ? 'potion' : item.type === 'shard' ? 'shard' : 'component';
-    const description = item.type === 'component' ? t('inspection.material', { material: t(`materials.${item.material}`) }) : item.type === 'rw3-component' ? `${componentName(item.name)}${comp?.desc ? ` — ${cleanRw3Desc(comp.desc)}` : ''}` : t(item.type === 'shard' ? 'inspection.shard' : 'inspection.potion');
-    $('inspection').innerHTML = `<div class="inspect-head"><div class="inspect-symbol">${entityIconSvg(iconKey, 34)}</div><div><h3>${escapeHtml(item.type === 'rw3-component' ? componentName(item.name) : item.type.toUpperCase())}</h3></div></div><p>${escapeHtml(description)}</p>`;
+    const description = item.type === 'companion' ? t('item.companion', { name: item.name }) : item.type === 'tome' ? t('item.tome', { spell: spellById.get(Number(item.spellId.slice(4)))?.name }) : ['scroll', 'chest'].includes(item.type) ? item.options.map(c => item.type === 'scroll' ? spellById.get(c).name : equipmentName(c)).join(' · ') : item.type === 'component' ? t('inspection.material', { material: t(`materials.${item.material}`) }) : item.type === 'rw3-component' ? `${componentName(item.name)}${comp?.desc ? ` — ${cleanRw3Desc(comp.desc)}` : ''}` : t(item.type === 'shard' ? 'inspection.shard' : 'inspection.potion');
+    $('inspection').innerHTML = `<div class="inspect-head"><div class="inspect-symbol">${entityIconSvg(iconKey, 34)}</div><div><h3>${escapeHtml(item.type === 'rw3-component' ? componentName(item.name) : t('pickup.' + item.type))}</h3></div></div><p>${escapeHtml(description)}</p>`;
   } else if (p && distance(game.player, p) === 0) {
     $('inspection').innerHTML = `<div class="inspect-head"><div class="inspect-symbol" style="overflow:hidden;padding:0">${wizardPortraitSvg()}</div><div><h3>${h('inspection.player')}</h3><p style="margin:2px 0 0"><span class="cyan-val">${game.player.shields || 0} SH</span></p></div></div><p>${h('inspection.playerHealth', { hp: game.player.hp, maxHp: maxHealth(game), ward: game.player.shield })}<br>${h('inspection.playerResources', { points: game.points, potions: game.potions })}</p>${renderResistances(game.player)}`;
   } else if (cloud) {
@@ -428,24 +515,25 @@ function populateFilters() {
 }
 
 function renderRw3Grimoire() {
-  const learnedSet = new Set(game.rw3Spells || []);
+  const learnedSet = new Set(knownSpellIds(game));
   $('rw3-learned-count').textContent = learnedSet.size;
   $('rw3-grimoire-points').textContent = t('atlas.points', { points: game.points });
-  const q = $('rw3-spell-search').value.trim().toLowerCase();
+  const q = $('rw3-spell-search').value.toLowerCase();
   const tag = $('rw3-tag-filter').value;
   const lvl = $('rw3-level-filter').value;
   const status = $('rw3-status-filter').value;
 
   const filtered = rw3Spells.filter(s => {
+    if (game.allowedSpells && !game.allowedSpells.includes(s.id) && !learnedSet.has(s.id) && !s.granted_by) return false;
     if (tag !== 'all' && !s.tags.includes(tag)) return false;
     if (lvl !== 'all' && String(s.level) !== lvl) return false;
     if (status === 'learned' && !learnedSet.has(s.id)) return false;
     if (status === 'available' && !canLearnRw3Spell(game, s.id)) return false;
-    if (q && !`${s.name} ${s.tags.join(' ')} ${s.desc}`.toLowerCase().includes(q)) return false;
+    if (q && !searchCatalogue(q, [s.name, ...s.tags, s.desc, s.granted_by || ''], s.summons)) return false;
     return true;
   });
 
-  $('rw3-spell-grid').innerHTML = filtered.slice(0, 120).map(s => {
+  $('rw3-spell-grid').innerHTML = filtered.map(s => {
     const isLearned = learnedSet.has(s.id);
     const canBuy = canLearnRw3Spell(game, s.id);
     const upCount = (game.rw3Upgrades?.[s.id] || []).length;
@@ -470,7 +558,7 @@ function renderRw3Grimoire() {
       <div class="rw3-stats-line">${statsParts.map(x => `<span>${escapeHtml(x)}</span>`).join('')}</div>
       <p class="rw3-desc">${escapeHtml(cleanRw3Desc(s.desc))}</p>
       <div class="rw3-card-actions">
-        ${isLearned ? '' : `<button class="primary" data-learn-rw3="${s.id}" ${canBuy ? '' : 'disabled'}>${h('rw3.learnSpell', { cost: s.level })}</button>`}
+        ${s.granted_by && !isLearned ? h('book.requires', { item: equipmentName(s.granted_by) }) : isLearned ? '' : `<button class="primary" data-learn-rw3="${s.id}" ${canBuy ? '' : 'disabled'}>${h('rw3.learnSpell', { cost: s.level })}</button>`}
         <button data-inspect-rw3="${s.id}">${h('rw3.upgrades')} (${upCount}/${(s.upgrades || []).length})</button>
       </div>
     </div>`;
@@ -482,7 +570,7 @@ function showRw3SpellDetail(spellId) {
   const base = spellById.get(spellId);
   if (!base) return;
   const eff = effectiveRw3Spell(game, spellId);
-  const isLearned = (game.rw3Spells || []).includes(spellId);
+  const isLearned = knownSpellIds(game).includes(spellId);
   const learnedUps = new Set(game.rw3Upgrades?.[spellId] || []);
   const primaryTag = eff.tags?.[0] || 'Arcane';
   const tagPills = eff.tags.map(tg => `<span class="tag-pill" style="color:${(TAG_META[tg] || TAG_META.Arcane).color}">${tagIconSvg(tg, 12)}<span>${escapeHtml(tg)}</span></span>`).join('');
@@ -510,7 +598,7 @@ function showRw3SpellDetail(spellId) {
       <div>CHARGES / HP<strong>${eff.maxCharges || '∞'} / ${eff.hpCost ? `-${eff.hpCost} HP` : '0'}</strong></div>
       <div>POINTS<strong>${game.points} SP</strong></div>
     </div>
-    ${isLearned ? '' : `<button class="primary" id="dialog-learn-rw3" ${canLearnRw3Spell(game, spellId) ? '' : 'disabled'}>${h('rw3.learnSpell', { cost: base.level })}</button>`}
+    ${base.granted_by && !isLearned ? h('book.requires', { item: equipmentName(base.granted_by) }) : isLearned ? '' : `<button class="primary" id="dialog-learn-rw3" ${canLearnRw3Spell(game, spellId) ? '' : 'disabled'}>${h('rw3.learnSpell', { cost: base.level })}</button>`}
     <h3 style="margin:18px 0 6px">${h('rw3.upgrades')}</h3>
     <div class="upgrade-list">${upsHtml}</div>
   `;
@@ -538,31 +626,32 @@ function renderRw3ForgeView() {
 
   if ($('forge-equipped-strip')) {
     $('forge-equipped-strip').innerHTML = equipmentSlots.map(slot => {
-      const item = game.equipment?.[slot]?.name;
+      const item = equippedLabel(slot);
       return `<div class="loadout-slot-card ${item ? 'equipped' : ''}">
         ${slotIconSvg(slot, 22)}
         <div>
           <span>${h(`slots.${slot.toLowerCase()}`)}</span>
-          <strong>${item ? escapeHtml(equipmentName(item)) : '—'}</strong>
+          <strong>${item ? escapeHtml(item) : '—'}</strong>
         </div>
       </div>`;
     }).join('');
   }
 
-  const q = $('rw3-eq-search').value.trim().toLowerCase();
+  const q = $('rw3-eq-search').value.toLowerCase();
   const slot = $('rw3-slot-filter').value;
   const status = $('rw3-eq-status-filter').value;
 
   const filtered = rw3Equipment.filter(item => {
+    if (game.allowedEquipment && !game.allowedEquipment.includes(item.name)) return false;
     if (slot !== 'all' && item.slot !== slot) return false;
     if (status === 'craftable' && !craftableNames.has(item.name)) return false;
-    if (q && !`${item.name} ${equipmentName(item.name)} ${item.slot} ${item.tags.join(' ')} ${item.desc} ${(item.bonuses || []).join(' ')}`.toLowerCase().includes(q)) return false;
+    if (q && !searchCatalogue(q, [item.name, equipmentName(item.name), item.slot, t(`slots.${item.slot.toLowerCase()}`), { Feet: 'footwear', Head: 'headwear' }[item.slot], ...item.tags, item.desc, ...item.bonuses], item.summons)) return false;
     return true;
   }).sort((a, b) => (craftableNames.has(b.name) ? 1 : 0) - (craftableNames.has(a.name) ? 1 : 0));
 
-  $('rw3-eq-grid').innerHTML = filtered.slice(0, 120).map(item => {
+  $('rw3-eq-grid').innerHTML = filtered.map(item => {
     const canMake = craftableNames.has(item.name);
-    const equipped = game.equipment?.[item.slot]?.name === item.name;
+    const equipped = Object.values(game.equipment).some(e => e.name === item.name);
     const recipeText = item.recipe.map(([tg, c]) => `${c}× ${tg}`).join(' + ');
     const bonuses = [...(item.bonuses || []), item.desc].filter(Boolean).map(cleanRw3Desc).join('\n');
     return `<div class="rw3-card ${canMake ? 'craftable-card' : ''} ${equipped ? 'learned-card' : ''}">
@@ -583,23 +672,47 @@ function renderRw3ForgeView() {
   }).join('');
 }
 
+$('shrine-special-select').onchange = renderShrineResult;
+$('bestiary-button').onclick = () => { renderBestiary(); $('bestiary-dialog').showModal(); };
+$('unit-search').oninput = $('unit-discovered').onchange = renderBestiary;
+$('unit-select').onchange = showUnit;
+$('older-turn').onclick = () => { const turns = [...new Set(game.log.map(e => e.turn))]; logTurn = turns[(logTurn == null ? 0 : turns.indexOf(logTurn)) + 1]; render(); };
+$('newer-turn').onclick = () => { const turns = [...new Set(game.log.map(e => e.turn))]; const idx = turns.indexOf(logTurn); logTurn = idx <= 1 ? null : turns[idx - 1]; render(); };
 $('shrine-activate-button').onclick = () => action(() => {
-  const sType = game.shrine?.type || 'transmutation';
   const val = $('shrine-special-select').value;
-  return useShrine(game, (sType === 'duplication' || sType === 'transmutation') ? { component: val } : sType === 'empowerment' ? { spellId: val } : {});
+  const result = $('shrine-result').value;
+  return useShrine(game, { component: val, spellId: val, slot: val, result, tag: result });
 });
 $('threat-button').onclick = () => { showThreats = !showThreats; renderForge(); draw(); };
 $('realm-tab').onclick = () => setView('realm');
 $('grimoire-tab').onclick = $('grimoire-cta').onclick = () => setView('grimoire');
 $('forge-tab').onclick = $('open-forge-cta').onclick = () => setView('forge');
-$('guide-button').onclick = () => $('guide-dialog').showModal();
+function showWardrobe() {
+  $('wardrobe-select').replaceChildren(...wardrobe.map(({ name, unlock }) => {
+    const opt = new Option(profile.outfits.includes(name) ? name : '🔒 ' + name, name);
+    opt.title = unlock; opt.disabled = !profile.outfits.includes(name); return opt;
+  }));
+  $('wardrobe-select').value = profile.selected;
+  $('outfit-info').textContent = t('wardrobe.count', { count: profile.outfits.length, total: wardrobe.length });
+}
+$('guide-button').onclick = () => { showWardrobe(); $('guide-dialog').showModal(); };
+$('wardrobe-select').onchange = () => { profile.selected = $('wardrobe-select').value; saveProfile(); render(); };
+$('reroll-rifts').onclick = () => action(() => rerollRifts(game));
+$('reward-dialog').oncancel = event => event.preventDefault();
+$('new-mode').onchange = () => {
+  $('mutator-options').hidden = $('new-mode').value !== 'custom';
+  $('new-seed').disabled = $('new-mode').value === 'weekly';
+};
+for (const el of $('mutator-options').querySelectorAll('input')) el.checked = profile.mutators?.includes(el.value);
 $('new-button').onclick = () => $('new-dialog').showModal();
 $('cancel-new').onclick = () => $('new-dialog').close();
 $('confirm-new').onclick = () => {
   const input = $('new-seed'); if (!input.checkValidity()) { input.reportValidity(); return; }
   const mode = $('new-mode').value || 'standard';
-  game = createGame(input.value ? Number(input.value) : undefined, { mode });
-  selected = null; hover = null; inspectionTarget = null; $('new-dialog').close(); setView('realm'); render();
+  if (game.mode === 'trial-improviser' && game.status === 'playing') profile.improviserWins = 0;
+  profile.mutators = [...$('mutator-options').querySelectorAll(':checked')].map(el => el.value); saveProfile();
+  game = createGame(input.value ? Number(input.value) : undefined, { mode, selectedMutators: profile.mutators });
+  logTurn = null; selected = null; hover = null; inspectionTarget = null; $('new-dialog').close(); setView('realm'); render();
 };
 for (const button of document.querySelectorAll('.close-dialog')) button.onclick = () => button.closest('dialog').close();
 $('spell-list').onclick = event => { const button = event.target.closest('[data-spell]'); if (!button || button.disabled) return; selected = selected === button.dataset.spell ? null : button.dataset.spell; render(); };
@@ -617,7 +730,22 @@ $('rw3-eq-grid').onclick = event => {
     const name = btn.dataset.forgeRw3;
     const item = rw3Equipment.find(i => i.name === name);
     const chosen = findMatchingComponents(game.rw3Components, item);
-    if (chosen && forge(game, name, chosen)) render();
+    if (!chosen) return;
+    const list = $('ingredient-choices');
+    $('ingredient-title').textContent = equipmentName(name);
+    $('ingredient-recipe').textContent = item.recipe.map(([tag, count]) => count + ' × ' + tag).join(' + ');
+    const options = [...new Set(game.rw3Components)];
+    list.replaceChildren(...Array.from({ length: item.recipe_cost }, (_, i) => {
+      const select = document.createElement('select');
+      select.setAttribute('aria-label', t('forge.ingredient', { n: i + 1 }));
+      select.replaceChildren(new Option('—', ''), ...options.map(c => new Option(componentName(c) + ' · ' + componentByName.get(c).tags.join('/'), c)));
+      select.value = chosen[i] || ''; return select;
+    }));
+    const selection = () => [...list.children].map(el => el.value).filter(Boolean);
+    list.onchange = () => { $('craft-chosen').disabled = !canForge(game, name, selection()); };
+    list.onchange();
+    $('craft-chosen').onclick = () => { if (forge(game, name, selection())) { $('ingredients-dialog').close(); render(); } };
+    $('ingredients-dialog').showModal();
   }
 };
 $('wait-button').onclick = () => action(() => wait(game));
@@ -628,6 +756,7 @@ function tileAt(event) { const bounds = canvas.getBoundingClientRect(); return {
 function walkTo(target) {
   const mods = getEquipmentModifiers(game);
   if (game.status !== 'playing' || (game.tiles[target.y]?.[target.x] !== 0 && !(mods.flying && game.tiles[target.y]?.[target.x] === 2))) return false;
+  if (game.mode !== 'standard' && distance(game.player, target) === 1) return move(game, target.x - game.player.x, target.y - game.player.y);
   let moved = false;
   for (let steps = 0; steps < SIZE * SIZE && game.status === 'playing' && distance(game.player, target) !== 0; steps++) {
     const path = shortestPath(game, game.player, target, mods.flying);
@@ -635,24 +764,37 @@ function walkTo(target) {
     const next = path[0], before = { ...game.player };
     if (!move(game, next.x - game.player.x, next.y - game.player.y)) break;
     moved = true;
-    if (distance(before, game.player) !== 1) break;
+    if (game.deploying || game.pendingReward || distance(before, game.player) !== 1) break;
   }
   return moved;
 }
 canvas.onpointermove = event => { hover = tileAt(event); inspect(hover); draw(); };
 canvas.onpointerleave = () => { hover = null; draw(); };
-canvas.onclick = event => { const target = tileAt(event); if (selected) action(() => cast(game, selected, target)); else if (distance(game.player, target) > 0) action(() => walkTo(target)); else inspect(target); };
+canvas.onclick = event => { const target = tileAt(event); if (game.deploying) { selected = null; action(() => deploy(game, target)); } else if (selected) action(() => cast(game, selected, target)); else if (distance(game.player, target) > 0) action(() => walkTo(target)); else inspect(target); };
 
 document.addEventListener('keydown', event => {
   if (document.querySelector('dialog[open]') || ['INPUT', 'SELECT', 'TEXTAREA'].includes(event.target.tagName) || event.ctrlKey || event.metaKey || event.altKey) return;
   const key = event.key.toLowerCase();
+  if (key === '[' || key === ']') {
+    const speeds = [0.5, 1, 2, 4];
+    const index = speeds.indexOf(profile.speed || 1) + (key === ']' ? 1 : -1);
+    profile.speed = speeds[Math.max(0, Math.min(speeds.length - 1, index))];
+    saveProfile();
+    $('target-hint').textContent = t('realm.animationSpeed', { speed: profile.speed });
+    return;
+  }
   if (key === 't' || key === 'g') { event.preventDefault(); setView(view === 'grimoire' ? 'realm' : 'grimoire'); return; }
   if (key === 'f') { event.preventDefault(); setView(view === 'forge' ? 'realm' : 'forge'); return; }
   if (view !== 'realm') return;
+  if (game.deploying && key === 'enter') { event.preventDefault(); action(() => deploy(game, hover || game.player)); return; }
+  const keypad = { Numpad1: [-1, 1], Numpad3: [1, 1], Numpad7: [-1, -1], Numpad9: [1, -1] };
+  if (game.mode !== 'standard' && keypad[event.code]) { event.preventDefault(); action(() => move(game, ...keypad[event.code])); return; }
   const moves = { arrowup: [0, -1], w: [0, -1], arrowdown: [0, 1], s: [0, 1], arrowleft: [-1, 0], a: [-1, 0], arrowright: [1, 0], d: [1, 0] };
   if (moves[key]) { event.preventDefault(); action(() => move(game, ...moves[key])); }
   else if (key === ' ' && event.target.tagName !== 'BUTTON') { event.preventDefault(); action(() => wait(game)); }
   else if (key === 'y') { showThreats = !showThreats; renderForge(); draw(); }
+  else if (key === 'q' && game.lastCast && availableSpells(game).some(s => s.id === game.lastCast.spellId)) { selected = game.lastCast.spellId; hover = { ...game.lastCast.target }; inspect(hover); render(); }
+  else if (key === 'enter' && selected && hover && event.target.tagName !== 'BUTTON') { event.preventDefault(); action(() => cast(game, selected, hover)); }
   else if (key === 'p') action(() => drink(game));
   else if (key === 'escape') { selected = null; render(); }
   else if (/^[1-9]$/.test(key)) { const spell = availableSpells(game)[Number(key) - 1]; if (spell) { selected = spell.id; render(); } }

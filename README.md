@@ -1,67 +1,55 @@
 # Wild Shock
 
-An original browser-based tactical spellcraft roguelike inspired by the single-screen, turn-based wizard combat of Rift Wizard. All code, interface text, and documentation are in English. No backend, runtime framework, account, or build dependencies are required.
+Wild Shock is a single-player, turn-based spellcraft roguelike for the browser. Start a new journey and select **Rift Wizard 3 Classic** to play the 21-realm campaign. **Standard** uses Wild Shock's 100-realm campaign, potions and one equipped item per slot. The interface supports English, Brazilian Portuguese and Spanish. Many catalog names and rule descriptions use their original English text.
 
 ## Play locally
 
-Requires Node.js 20+ for tests/build and Python 3 for the local server.
+Run `npm run dev` with Python 3 installed and open http://localhost:5173. The game uses native ES modules. This release starts a fresh journey and saves it in the browser under `wild-shock-v2`. For the automated tests and static build, use Node.js 20 or newer.
 
-```sh
-npm run dev
-```
+## Reference build and coverage
 
-Open http://localhost:5173. Serve over HTTP; ES modules cannot reliably run by opening `index.html` directly.
+The latest developer announcement found on November 23, 2026 was the October 12 beta patch. Wild Shock uses the community compendium for that beta, build **25891047**. The previous catalog contained the live build's spells, equipment and components. The table compares the two upstream datasets. [Developer announcements](https://steamcommunity.com/app/4366330/?l=english) · [Compendium](https://hpp3.github.io/rw3/) · [Build manifest](https://hpp3.github.io/rw3/versions.json)
 
-## Gameplay
+| Category | Live build 24995190 | Beta build 25891047 | In Wild Shock |
+| --- | ---: | ---: | --- |
+| Spells | 196 | 198 | Grimoire, targeting, charges, channeling and spellbook access |
+| Spell upgrades | 789 | 797 | Purchasable upgrades, stat modifiers and individual combat rules |
+| Equipment | 365 | 375 | Searchable recipes, selected ingredients, passive bonuses and event-triggered effects |
+| Components | 93 | 94 | Collectible ingredients, affinities and pickup/craft effects |
+| Units | 494 | 496 | Searchable bestiary, attacks, resistances, passives and encounter or summon pools |
+| Outfits | 81 | 81 | Browser wardrobe with local unlocks and palette variants |
 
-- 100 seeded procedural realms, two exit choices, and a boss every sixth realm.
-- Strict turn-based movement, melee, ranged spells, line of sight, enemy pathfinding, and visible attack intentions.
-- 12 magic schools, 144 unlockable spells, and **2,304 connected skill nodes**: 12 schools × 12 paths × 16 ranks.
-- The atlas is a combinatorial progression system: ranks improve school-wide attributes rather than representing 2,304 bespoke spell behaviors. Area, range, chain, damage, protection, reserves, status duration, vitality, echo damage, leech, and resistance penetration all affect combat.
-- Burn, poison, freeze, shock, drain, healing, and wards; same-school enemy resistance.
-- Three collectible crafting materials and six permanent artifacts with stat bonuses and combat triggers.
-- Three-use transmutation shrines, exact portal reward previews, and toggleable enemy attack zones.
-- Limited spell charges, restoration potions, skill-point pickups, realm-clear rewards, permanent death, and a final victory state.
-- Automatic browser-local saving, reproducible world seeds, responsive interface, and touch movement controls.
+The beta adds Orb of Explosions, Orb of Reflection, ten equipment recipes and Ball Lightning. Examples of implemented interactions include relocating a single orb, reflecting typed damage, using the Shrine of Knowledge with a rare crafting component, and doubling spell charges with a tome.
+
+The public catalog contains tooltips, stats and recipes. Some conditional upgrades, equipment triggers and unit abilities still use shared combat rules or have only their catalog description. The Sculptor vault's unique reward, the complete trial and achievement rules, original wardrobe artwork, Steam achievements and Workshop integration are outstanding. Encounter layouts, mastery scaling, reward frequency and balance are Wild Shock adaptations. The tests exercise learning and casting every spell, purchasing every upgrade and crafting eligibility across the entire catalog. Additional tests run combat with every species on both teams and collect every component. Individual rule tests cover selected interactions, including Mordred's three forms, Ophan's redirected damage, orb relocation and Petrify's stacking debuff. Full behavioral equivalence with the original game is unverified.
+
+## Campaign and equipment
+
+- Inspect an exit to see the next realm's creatures, shrine and components. Reroll the destinations before traveling. In the Rift Wizard campaign, choose between two realm 20 bosses and face Mordred in realm 21. Choose a free landing tile after traveling.
+- The generator includes common and rare creatures, giants with multi-tile footprints, lairs and ten themed vaults. Recruit companions on the board. Keeping the Great Faery alive through the Fettered Fae vault lets her accompany you into later realms.
+- The forge accepts specific affinities and wildcards. Each component contributes all its affinities. Choose the actual ingredients before crafting to control ingredient effects. Rift Wizard modes allow multiple equipped items of the same type. Dismantle crafted gear at the Shrine of Reformation.
+- Spellbooks grant access to ten forbidden spells. Ten shrine types provide different choices. Acquired scrolls and equipment chests offer a choice that persists until claimed.
+- Weekly runs use the same seed and modifiers throughout each Monday-to-Sunday UTC week. Custom runs let you choose modifiers. Scavenger uses four-option scrolls and chests. Improviser limits the spell and recipe pools for the journey.
+- The field guide includes the wardrobe. The bestiary has a full reference and a filter for creatures defeated across your journeys.
 
 ### Controls
 
 | Action | Control |
 | --- | --- |
-| Move / melee | WASD or arrow keys; adjacent tile click; touch arrows |
-| Select spell | Click the grimoire or press 1–9 |
-| Cast | Click a floor tile in range and line of sight |
+| Move or strike | WASD, arrow keys, touch controls or click a destination |
+| Diagonal step in Rift Wizard modes | Click an adjacent diagonal tile or use numpad 1, 3, 7 or 9 |
+| Open grimoire / forge | G or T / F |
+| Select and cast a spell | 1–9 or select a spell, then click the target |
+| Recall last spell and target / cast there | Q / Enter |
 | Cancel targeting | Escape |
-| Wait | Space |
-| Restoration potion | P |
-| Skill atlas | T |
-| Toggle enemy attack zones | Y or the button below the board |
-| Inspect | Hover or tap a creature |
+| Wait or advance channel | Space |
+| Drink a restoration potion, when available | P |
+| Toggle enemy attack zones | Y |
+| Change animation speed | [ and ] |
 
-Learning is free of turn cost. Each root unlocks its school/path spell. Later ranks require the previous rank and cost 1–4 skill points. Collect memory shards and clear realms to gain points. You specialize within a journey; the whole atlas is not intended to be purchased in a single run.
+## Catalog maintenance
 
-Clear every hostile before entering a portal. New realms restore health and spell charges. The upper portal selects Mossbound enemy affinities; the lower selects Emberfall affinities. Complete realm 100 and enter a portal to win.
-
-## Artifact forge and scouting
-
-Open **Recipes & equipment** in the right-hand Artifact Forge. New journeys start with one spark, ember, and crystal. Collect the lettered S/E/C tokens by walking onto them. Crafting is free of turn cost, consumes the listed materials, and permanently equips the artifact for that journey. Each recipe can be crafted once; all six can coexist.
-
-| Artifact | Recipe | Effect |
-| --- | --- | --- |
-| Stormglass Rod | 2 spark + 1 crystal | +4 Storm/Astral spell damage |
-| Cinderheart | 2 ember + 1 spark | +4 Ember damage; heal 2 HP per kill |
-| Rime Mantle | 2 crystal + 1 ember | Start each new realm with 8 ward; +1 frost duration |
-| Wayfarer Prism | 2 crystal + 1 spark | +1 spell range, +2 maximum and current charges when crafted |
-| Thorn Ring | 1 ember + 1 crystal | Spell hits apply at least 3 turns of poison |
-| Storm Bell | 2 spark + 2 ember | Every third cast after crafting deals 5 damage to visible enemies within 4 tiles |
-
-Stand within one tile (including diagonals) of the blue shrine to exchange one material for another. Use the From/To controls in the forge. Each shrine allows three exchanges; each exchange advances combat one turn. Hover or tap a portal to preview the next realm's hostiles, boss, affinities and materials. Mossbound provides two sparks and a crystal; Emberfall provides two embers and a crystal.
-
-**Y** toggles current enemy attack areas, respecting walls, freeze and next-turn shock. This overlay shows current attack range, not a prediction of future movement. Old saves retain their current realm and gain empty crafting inventories; new props appear on entering the next realm. Existing skill progression remains available alongside crafting.
-
-### Research references
-
-These are original, smaller adaptations of mechanics described in [Rift Wizard 3's official store page](https://store.steampowered.com/app/4366330/Rift_Wizard_3/) (components, crafted passive artifacts, and portal choices) and [developer patch notes](https://steamcommunity.com/app/4366330/?l=english) (transmutation shrines and threat inspection), consulted October 25, 2026. Recipes, numbers and artifact effects here are specific to Wild Shock, not a reproduction of Rift Wizard 3's full systems or balance.
+Download the desired dataset listed in the compendium build manifest and run `python3 scripts/import-compendium.py /path/to/data.beta.json`. The generated catalog includes the build ID and branch. The browser uses the bundled data offline after the page has loaded. Combat behavior is implemented separately in `src/engine.js`, `src/spell-effects.js`, `src/equipment-effects.js`, `src/component-effects.js` and `src/bestiary.js`.
 
 ## GitHub Pages
 
@@ -75,20 +63,3 @@ Alternatively, publish the repository root from a branch: it contains the static
 npm test
 npm run build
 ```
-
-## Project structure
-
-- `src/locales/`: one complete translation file per language; see [translation maintenance](src/locales/README.md) for keys, parameters and adding languages.
-- `src/i18n.js`: locale registry, key lookup, interpolation and explicit HTML bindings.
-- `src/game-text.js`: localized catalog labels and descriptions.
-- `src/log-migration.js`: converts saved English log messages to language-neutral events.
-- `src/artifacts.js`: material recipes, artifact definitions and spell bonuses.
-- `src/catalog.js`: deterministic skill catalog and accumulated spell statistics.
-- `src/engine.js`: DOM-independent world generation, actions, AI, progression, and save serialization.
-- `src/app.js`: canvas pixel art, interface, input, atlas, and local storage.
-- `style.css`: responsive dark fantasy interface.
-- `tests/artifacts.test.js`: crafting, combat triggers, shrines, scouting, generation and save migration.
-- `tests/engine.test.js`: catalog, generation, combat, progression, and save tests.
-- `scripts/build.mjs`: static distribution packaging.
-
-The pixel artwork is drawn directly in canvas. Google Fonts is optional; system fonts work if the font service is unavailable. Saved games are stored only in the current browser under `wild-shock-v1`. Private browsing or clearing site data may remove progress. This initial version has automated mechanics coverage; full-campaign difficulty and build balance need playtesting.

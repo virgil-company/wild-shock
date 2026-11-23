@@ -28,11 +28,11 @@
       </button>
       <button class="nav" id="grimoire-tab" data-tooltip="" data-i18n-tooltip="nav.rw3GrimoireTooltip">
         <span data-i18n="nav.rw3Grimoire"></span>
-        <span class="nav-badge">196</span>
+        <span class="nav-badge" id="spell-total"></span>
       </button>
       <button class="nav" id="forge-tab" data-tooltip="" data-i18n-tooltip="nav.rw3ForgeTooltip">
         <span data-i18n="nav.rw3Forge"></span>
-        <span class="nav-badge">365</span>
+        <span class="nav-badge" id="equipment-total"></span>
       </button>
       <button class="nav" id="guide-button" data-tooltip="" data-i18n-tooltip="nav.rulesObjectivesAndControls">
         <span data-i18n="nav.fieldGuide"></span>
@@ -199,6 +199,7 @@
           <span class="enemy-icon" id="icon-skull" aria-hidden="true">☠</span>
         </div>
         <div class="rift-status" id="rift-status"></div>
+        <button id="reroll-rifts" class="atlas-cta"></button>
       </div>
 
       <div class="panel inspect-panel">
@@ -207,6 +208,7 @@
           <span class="heading-sigil">⌖</span>
         </div>
         <div id="inspection"></div>
+        <button id="bestiary-button" class="atlas-cta" data-i18n="bestiary.title"></button>
       </div>
 
       <div class="panel forge-panel">
@@ -229,7 +231,8 @@
           </div>
           <div id="shrine-special-box">
             <p id="shrine-special-desc" class="muted"></p>
-            <select id="shrine-special-select" hidden></select>
+            <select id="shrine-special-select" data-i18n-aria-label="shrine.selectSource" hidden></select>
+            <select id="shrine-result" data-i18n-aria-label="shrine.selectResult" hidden></select>
             <button id="shrine-activate-button" data-i18n="shrine.useButton"></button>
           </div>
         </div>
@@ -241,6 +244,7 @@
           <span class="heading-sigil">≡</span>
         </div>
         <div id="log" aria-live="polite"></div>
+        <div class="journal-controls"><button id="older-turn" data-i18n="journal.older"></button><button id="newer-turn" data-i18n="journal.newer"></button></div>
       </div>
     </aside>
   </section>
@@ -315,7 +319,7 @@
 
   <footer>
     <span><span data-i18n="app.brand"></span> <span class="footer-dot">✦</span> <span data-i18n="footer.everyTurnIsAChoice"></span></span>
-    <span><span data-i18n="nav.rw3Grimoire"></span> (196) <span class="footer-dot">·</span> <span data-i18n="nav.rw3Forge"></span> (365)</span>
+    <span><span data-i18n="nav.rw3Grimoire"></span> (198) <span class="footer-dot">·</span> <span data-i18n="nav.rw3Forge"></span> (375)</span>
   </footer>
 </main>
 
@@ -324,11 +328,28 @@
   <div id="detail-content"></div>
 </dialog>
 
+<dialog id="ingredients-dialog">
+  <button class="close-dialog" data-i18n-aria-label="common.close">×</button>
+  <h2 id="ingredient-title"></h2><p id="ingredient-recipe"></p>
+  <div id="ingredient-choices"></div>
+  <button id="craft-chosen" class="primary" data-i18n="rw3.forgeItem"></button>
+</dialog>
+<dialog id="bestiary-dialog">
+  <button class="close-dialog" data-i18n-aria-label="common.close">×</button>
+  <h2 data-i18n="bestiary.title"></h2>
+  <input type="search" id="unit-search" data-i18n-placeholder="bestiary.search" data-i18n-aria-label="bestiary.search">
+  <label><input type="checkbox" id="unit-discovered"> <span data-i18n="bestiary.discovered"></span></label>
+  <select id="unit-select" size="7" data-i18n-aria-label="bestiary.title"></select>
+  <div id="unit-detail"></div>
+</dialog>
 <dialog id="guide-dialog">
   <button class="close-dialog" aria-label="" data-i18n-aria-label="guide.close">×</button>
   <div class="eyebrow" data-i18n="guide.fieldGuide"></div>
   <h2><span data-i18n="guide.aLittleKnowledge"></span><br><span data-i18n="guide.aLongerLife"></span></h2>
   <p data-i18n="guide.introduction"></p>
+  <p data-i18n="guide.reselect"></p>
+  <label><span data-i18n="wardrobe.title"></span> <select id="wardrobe-select"></select></label>
+  <p id="outfit-info" class="muted"></p>
   <dl>
     <dt data-i18n="guide.moveStrike"></dt><dd data-i18n="guide.move.description"></dd>
     <dt data-i18n="guide.castASpell"></dt><dd data-i18n="guide.cast.description"></dd>
@@ -343,6 +364,7 @@
   <p class="muted" data-i18n="guide.storage"></p>
 </dialog>
 
+<dialog id="reward-dialog"><h2 data-i18n="reward.choose"></h2><div id="reward-options"></div></dialog>
 <dialog id="new-dialog">
   <div class="eyebrow" data-i18n="journey.aNewBeginning"></div>
   <h2 data-i18n="journey.stepIntoAnotherRift"></h2>
@@ -357,12 +379,31 @@
       <option value="trial-stormcaller" data-i18n="mode.trial-stormcaller"></option>
       <option value="trial-conjurer" data-i18n="mode.trial-conjurer"></option>
       <option value="trial-ironman" data-i18n="mode.trial-ironman"></option>
+      <option value="trial-electromancer" data-i18n="mode.trial-electromancer"></option>
+      <option value="trial-cryomancer" data-i18n="mode.trial-cryomancer"></option>
+      <option value="trial-phytomancer" data-i18n="mode.trial-phytomancer"></option>
+      <option value="trial-manamancer" data-i18n="mode.trial-manamancer"></option>
+      <option value="trial-sanctumancer" data-i18n="mode.trial-sanctumancer"></option>
+      <option value="trial-ferromancer" data-i18n="mode.trial-ferromancer"></option>
+      <option value="trial-hemomancer" data-i18n="mode.trial-hemomancer"></option>
+      <option value="trial-chronomancer" data-i18n="mode.trial-chronomancer"></option>
+      <option value="trial-improviser" data-i18n="mode.trial-improviser"></option>
+      <option value="trial-scavenger" data-i18n="mode.trial-scavenger"></option>
+      <option value="mutated" data-i18n="mode.mutated"></option>
+      <option value="weekly" data-i18n="mode.weekly"></option>
+      <option value="custom" data-i18n="mode.custom"></option>
     </select>
   </label>
   <label class="seed-input">
     <span data-i18n="journey.worldSeedOptional"></span>
     <input id="new-seed" type="number" min="0" max="2147483647" placeholder="" data-i18n-placeholder="journey.randomWorld">
   </label>
+  <fieldset id="mutator-options" hidden><legend data-i18n="mutators.title"></legend>
+<label><input type="checkbox" value="enemyResistance"><span data-i18n="mutators.enemyResistance"></span></label>
+<label><input type="checkbox" value="vulnerability"><span data-i18n="mutators.vulnerability"></span></label>
+<label><input type="checkbox" value="weather"><span data-i18n="mutators.weather"></span></label>
+<label><input type="checkbox" value="damageDebuff"><span data-i18n="mutators.damageDebuff"></span></label>
+</fieldset>
   <div class="dialog-actions">
     <button id="cancel-new" data-i18n="journey.keepExploring"></button>
     <button class="primary" id="confirm-new" data-i18n="journey.beginJourney"></button>

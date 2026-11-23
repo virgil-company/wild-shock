@@ -31,17 +31,28 @@ export const TAG_META = {
   Word: { color: '#fda4af', icon: '❖' },
 };
 
-export const SHRINE_TYPES = ['transmutation', 'duplication', 'empowerment', 'chronomancy', 'calling'];
+export const SHRINE_TYPES = ['transmutation', 'duplication', 'empowerment', 'chronomancy', 'calling', 'haste', 'offering', 'knowledge', 'reformation', 'spellgraft'];
 
 export const GAME_MODES = {
   standard: { id: 'standard', finalRealm: 100, potions: true, allowedTags: null, enemyHpMult: 1, startPoints: 12, starterRw3: [101, 61, 95] },
-  rw3: { id: 'rw3', finalRealm: 20, potions: false, allowedTags: null, enemyHpMult: 1, startPoints: 14, starterRw3: [101, 61] },
-  'trial-pyromancer': { id: 'trial-pyromancer', finalRealm: 20, potions: false, allowedTags: ['Fire'], enemyHpMult: 1, startPoints: 14, starterRw3: [61] },
-  'trial-necromancer': { id: 'trial-necromancer', finalRealm: 20, potions: false, allowedTags: ['Dark', 'Blood'], enemyHpMult: 1, startPoints: 14, starterRw3: [29] },
-  'trial-stormcaller': { id: 'trial-stormcaller', finalRealm: 20, potions: false, allowedTags: ['Lightning', 'Ice'], enemyHpMult: 1, startPoints: 14, starterRw3: [95] },
-  'trial-conjurer': { id: 'trial-conjurer', finalRealm: 20, potions: false, allowedTags: ['Conjuration'], enemyHpMult: 1, startPoints: 14, starterRw3: [184] },
-  'trial-ironman': { id: 'trial-ironman', finalRealm: 20, potions: false, allowedTags: null, enemyHpMult: 1.5, startPoints: 16, starterRw3: [101] },
+  rw3: { id: 'rw3', finalRealm: 21, potions: false, allowedTags: null, enemyHpMult: 1, startPoints: 14, starterRw3: [101, 61] },
+  'trial-pyromancer': { id: 'trial-pyromancer', finalRealm: 21, potions: false, allowedTags: ['Fire'], enemyHpMult: 1, startPoints: 14, starterRw3: [61] },
+  'trial-necromancer': { id: 'trial-necromancer', finalRealm: 21, potions: false, allowedTags: ['Dark', 'Blood'], enemyHpMult: 1, startPoints: 14, starterRw3: [29] },
+  'trial-stormcaller': { id: 'trial-stormcaller', finalRealm: 21, potions: false, allowedTags: ['Lightning', 'Ice'], enemyHpMult: 1, startPoints: 14, starterRw3: [95] },
+  'trial-conjurer': { id: 'trial-conjurer', finalRealm: 21, potions: false, allowedTags: ['Conjuration'], enemyHpMult: 1, startPoints: 14, starterRw3: [184] },
+  'trial-ironman': { id: 'trial-ironman', finalRealm: 21, potions: false, allowedTags: null, enemyHpMult: 1.5, startPoints: 16, starterRw3: [101] },
 };
+
+export const mancerTrials = {
+  electromancer: ['Lightning', 95], cryomancer: ['Ice', 86], phytomancer: ['Nature', 122],
+  manamancer: ['Arcane', 101], sanctumancer: ['Holy', 77], ferromancer: ['Metallic', 160],
+  hemomancer: ['Blood', 10], chronomancer: ['Translocation', 8],
+};
+for (const [name, [tag, id]] of Object.entries(mancerTrials)) {
+  const mode = 'trial-' + name;
+  GAME_MODES[mode] = { ...GAME_MODES.rw3, id: mode, allowedTags: [tag], starterRw3: [id] };
+}
+for (const mode of ['weekly', 'custom', 'mutated', 'trial-scavenger', 'trial-improviser']) GAME_MODES[mode] = { ...GAME_MODES.rw3, id: mode };
 
 export const STATUS_LIST = [
   'burn', 'immolate', 'poison', 'bleed', 'freeze', 'stun', 'petrify', 'glassed',
@@ -58,56 +69,58 @@ export const CLOUD_TYPES = {
 };
 
 export function getModeConfig(mode) {
-  return GAME_MODES[mode] || GAME_MODES.standard;
+  return Object.hasOwn(GAME_MODES, mode) ? GAME_MODES[mode] : GAME_MODES.standard;
 }
 
-// The compendium's recipes are tag requirements. A component may satisfy one
-// listed tag and a wildcard accepts any remaining component.
+// Each tag on a component supplies one essence. Specific recipe slots have
+// priority, then unused essences of any type can fill the wildcard slots.
 export function recipeMatches(item, componentNames) {
-  if (!item || componentNames.length !== item.recipe_cost) return false;
-  const pool = componentNames.map(name => componentByName.get(name)).filter(Boolean);
-  if (pool.length !== componentNames.length) return false;
-  const requirements = item.recipe.flatMap(([tag, count]) => Array(count).fill(tag));
-  const used = new Set();
-  function assign(index) {
-    if (index === requirements.length) return true;
-    const tag = requirements[index];
-    for (let i = 0; i < pool.length; i++) if (!used.has(i) && (tag === 'Any' || pool[i].tags.includes(tag))) {
-      used.add(i); if (assign(index + 1)) return true; used.delete(i);
+  if (!item || !Array.isArray(componentNames) || componentNames.length > item.recipe_cost) return false;
+  const counts = new Map();
+  let total = 0;
+  for (const name of componentNames) {
+    const component = componentByName.get(name);
+    if (!component) return false;
+    for (const tag of component.tags) {
+      counts.set(tag, (counts.get(tag) || 0) + 1);
+      total++;
     }
-    return false;
   }
-  return assign(0);
+  return total >= item.recipe_cost && item.recipe.every(([tag, n]) => tag === 'Any' || (counts.get(tag) || 0) >= n);
 }
 
-// Finds a valid subset of components in the player's inventory for a recipe.
 export function findMatchingComponents(inventory, item) {
-  if (!item || !Array.isArray(inventory) || inventory.length < item.recipe_cost) return null;
-  const requirements = item.recipe
-    .flatMap(([tag, count]) => Array(count).fill(tag))
-    .sort((a, b) => (a === 'Any' ? 1 : 0) - (b === 'Any' ? 1 : 0));
-  const pool = inventory.map(name => componentByName.get(name)).filter(Boolean);
-  const used = new Set();
+  if (!item || !Array.isArray(inventory)) return null;
+  const needed = new Map(item.recipe.filter(([tag]) => tag !== 'Any'));
+  const pool = new Map();
+  for (const name of inventory) if (componentByName.has(name)) pool.set(name, (pool.get(name) || 0) + 1);
   const chosen = [];
-  function assign(index) {
-    if (index === requirements.length) return true;
-    const tag = requirements[index];
-    for (let i = 0; i < pool.length; i++) {
-      if (!used.has(i) && (tag === 'Any' || pool[i].tags.includes(tag))) {
-        used.add(i);
-        chosen.push(pool[i].name);
-        if (assign(index + 1)) return true;
-        chosen.pop();
-        used.delete(i);
-      }
+  let essences = 0;
+  while (needed.size || essences < item.recipe_cost) {
+    let best, bestScore = 0;
+    for (const name of pool.keys()) {
+      const { tags } = componentByName.get(name);
+      const matching = tags.filter(tag => needed.has(tag)).length;
+      if (needed.size && !matching) continue;
+      const score = matching * 100 + Math.min(tags.length, Math.max(0, item.recipe_cost - essences));
+      if (score > bestScore) { best = name; bestScore = score; }
     }
-    return false;
+    if (!best) return null;
+    chosen.push(best);
+    if (pool.get(best) === 1) pool.delete(best);
+    else pool.set(best, pool.get(best) - 1);
+    for (const tag of componentByName.get(best).tags) {
+      essences++;
+      if (needed.get(tag) === 1) needed.delete(tag);
+      else if (needed.has(tag)) needed.set(tag, needed.get(tag) - 1);
+    }
   }
-  return assign(0) ? chosen : null;
+  return chosen;
 }
 
 export function canForge(game, name, componentNames) {
   const item = equipmentByName.get(name);
+  if (game.allowedEquipment && !game.allowedEquipment.includes(name)) return false;
   const chosen = componentNames || findMatchingComponents(game.rw3Components || [], item);
   if (!chosen) return false;
   return game.status === 'playing' && !!item && recipeMatches(item, chosen)
@@ -119,106 +132,61 @@ export function forge(game, name, componentNames) {
   const chosen = componentNames || findMatchingComponents(game.rw3Components || [], item);
   if (!chosen || !canForge(game, name, chosen)) return false;
   for (const c of chosen) game.rw3Components.splice(game.rw3Components.indexOf(c), 1);
-  game.equipment ??= {};
-  game.equipment[item.slot] = { name: item.name, components: [...chosen] };
-  applyComponentCraftEffects(game, item, chosen);
+  const copy = equipItem(game, item, chosen);
+  applyComponentCraftEffects(game, item, chosen, copy);
   return item;
 }
 
-export function applyComponentCraftEffects(game, item, componentNames) {
+export function equipItem(game, item, components = []) {
+  const gear = game.equipment ??= {};
+  let key = item.slot;
+  if (game.mode !== 'standard') {
+    let i = 1;
+    while (Object.hasOwn(gear, key)) key = item.slot + '-' + (++i);
+  }
+  return gear[key] = { name: item.name, components: [...components] };
+}
+
+export function applyComponentCraftEffects(game, item, componentNames, copy = game.equipment[item.slot]) {
   const events = [];
+  let offset = 0;
+  function choose(list) {
+    if (!list.length) return null;
+    return list[Math.abs(game.seed + game.turn * 97 + game.realm * 13 + offset++) % list.length];
+  }
   for (const name of componentNames) {
-    const comp = componentByName.get(name);
-    if (!comp?.on_craft || !comp.desc) continue;
-    const desc = comp.desc;
-    // Rare components that return to inventory when crafting a matching-tag item
-    const returnMatch = desc.match(/If the crafted equipment has the \[(\w+)\] tag, this is returned/i);
-    if (returnMatch && item.tags.includes(returnMatch[1])) {
+    const returned = name === "Enchanter's Awl" && item.tags.includes('Enchantment')
+      || name === "Polymath's Palimpsest" && item.recipe.some(([tag]) => tag === 'Word');
+    if (returned) {
       game.rw3Components.push(name);
       events.push({ type: 'returned', component: name });
     }
-    const spMatch = desc.match(/Gain (\d+) SP/i);
-    if (spMatch) {
-      const sp = Number(spMatch[1]);
-      game.points = (game.points || 0) + sp;
-      events.push({ type: 'sp', amount: sp });
+    const spells = knownSpellIds(game).map(id => spellById.get(id));
+    if (name === 'Primordial Ooze' && item.tags.includes('Slime')) {
+      const spell = choose(spells.filter(s => !effectiveRw3Spell(game, s.id).tags.includes('Slime')));
+      if (spell) ((game.spellBoosts['rw3-' + spell.id] ??= {}).tags ??= []).push('Slime');
     }
-    const shMatch = desc.match(/Gain (\d+) \[SH:shields\]/i);
-    if (shMatch && game.player) {
-      game.player.shields = (game.player.shields || 0) + Number(shMatch[1]);
-      events.push({ type: 'shields', amount: Number(shMatch[1]) });
+    if (name === 'Charred Relic' && item.tags.includes('Holy')) {
+      const spell = choose(spells.filter(s => effectiveRw3Spell(game, s.id).tags.includes('Holy')));
+      if (spell) (copy.relicSpells ??= []).push(spell.id);
+    }
+    if (name === 'Chimera Eyes' && item.tags.some(t => ['Chaos', 'Eye'].includes(t))) {
+      let granted = false;
+      for (const spell of spells.filter(s => effectiveRw3Spell(game, s.id).tags.includes('Eye'))) {
+        const known = game.rw3Upgrades[spell.id] ??= [];
+        const u = choose(spell.upgrades.filter(u => !known.includes(u.sp_id)));
+        if (u) { known.push(u.sp_id); granted = true; }
+      }
+      if (granted) {
+        const stored = copy.components;
+        stored.splice(stored.indexOf(name), 1);
+      }
     }
   }
   return events;
 }
 
-export function applyComponentPickupEffects(game, name) {
-  const comp = componentByName.get(name);
-  if (!comp?.on_pickup || !comp.desc) return null;
-  const desc = comp.desc;
-  if (/Regain a charge of each of your spells/i.test(desc)) {
-    for (const key of Object.keys(game.charges || {})) game.charges[key]++;
-    return { type: 'recharge', amount: 1 };
-  }
-  const shMatch = desc.match(/Gain (\d+) \[SH:shields\]/i);
-  if (shMatch && game.player) {
-    const amount = Number(shMatch[1]);
-    game.player.shields = (game.player.shields || 0) + amount;
-    return { type: 'shields', amount };
-  }
-  const hpMatch = desc.match(/Gain (\d+) max HP/i);
-  if (hpMatch && game.player) {
-    const amount = Number(hpMatch[1]);
-    game.bonusMaxHp = (game.bonusMaxHp || 0) + amount;
-    game.player.hp += amount;
-    return { type: 'maxHp', amount };
-  }
-  const spMatch = desc.match(/Gain (\d+) SP/i);
-  if (spMatch) {
-    const amount = Number(spMatch[1]);
-    game.points = (game.points || 0) + amount;
-    return { type: 'sp', amount };
-  }
-  const healMatch = desc.match(/Heal (?:for )?(\d+)/i);
-  if (healMatch && game.player) {
-    const amount = Number(healMatch[1]);
-    game.player.hp += amount;
-    return { type: 'heal', amount };
-  }
-  const auraMatch = desc.match(/damage aura that deals (\d+) \[(\w+)\] damage to enemies within (\d+) tiles for (\d+) turns/i);
-  if (auraMatch) {
-    game.buffs ??= [];
-    game.buffs.push({
-      id: `aura-${name}`,
-      name,
-      type: 'aura',
-      damage: Number(auraMatch[1]),
-      damageType: auraMatch[2],
-      radius: Number(auraMatch[3]),
-      duration: Number(auraMatch[4]),
-    });
-    return { type: 'aura', damage: Number(auraMatch[1]), damageType: auraMatch[2] };
-  }
-  const resistMatch = desc.match(/(\d+)% \[(\w+)\] resist/i);
-  if (resistMatch) {
-    game.buffs ??= [];
-    game.buffs.push({
-      id: `resist-${name}`,
-      name,
-      type: 'resist',
-      damageType: resistMatch[2],
-      amount: Number(resistMatch[1]),
-      duration: 15,
-    });
-    return { type: 'resist', damageType: resistMatch[2], amount: Number(resistMatch[1]) };
-  }
-  // Fallback helpful pickup boon for other on_pickup components
-  if (game.player) {
-    game.player.shields = (game.player.shields || 0) + 1;
-    return { type: 'shields', amount: 1 };
-  }
-  return null;
-}
+export { applyComponentPickupEffects } from './engine.js';
 
 export function addComponent(game, name) {
   if (!componentByName.has(name)) return false;
@@ -232,18 +200,18 @@ export function catalogueCounts() { return { spells: rw3Spells.length, equipment
 // "All spells gain [1 Range:range]"
 export function parseBonusLine(line) {
   const tagMatch = line.match(/\[(\w+):\w+\]\s+spells/i);
-  const statMatch = line.match(/gain\s+\[(-?\d+)\s+[^:\]]+:(\w+)\]/i);
+  const statMatch = line.match(/gain\s+\[(-?\d+)(%?)\s+[^:\]]+:(\w+)\]/i);
   if (!statMatch) return null;
   return {
     tag: tagMatch ? tagMatch[1] : null,
-    stat: statMatch[2],
+    stat: statMatch[3], percent: !!statMatch[2],
     amount: Number(statMatch[1]),
   };
 }
 
 export function getEquippedItems(game) {
   const eq = game.equipment || {};
-  return equipmentSlots.map(slot => eq[slot]?.name ? equipmentByName.get(eq[slot].name) : null).filter(Boolean);
+  return Object.values(eq).map(copy => equipmentByName.get(copy.name)).filter(Boolean);
 }
 
 export function getEquipmentModifiers(game) {
@@ -258,13 +226,31 @@ export function getEquipmentModifiers(game) {
     turnEffects: [],
     onCastEffects: [],
   };
-  for (const item of getEquippedItems(game)) {
+  for (const copy of Object.values(game.equipment || {})) {
+    const item = equipmentByName.get(copy.name);
+    if (!item) continue;
+    const ingredients = copy.components;
+    const modifiers = [];
+    for (const spellId of copy.relicSpells || []) {
+      for (const stat of Object.keys(spellById.get(spellId).stats)) modifiers.push({ spellId, stat, amount: 1 });
+    }
     for (const line of item.bonuses || []) {
       const parsed = parseBonusLine(line);
-      if (parsed) mods.bonuses.push(parsed);
+      if (parsed) modifiers.push(parsed);
+      const res = line.match(/^(-?\d+)% Resist (\w+)$/);
+      if (res) mods.resistances[res[2]] = (mods.resistances[res[2]] || 0) + Number(res[1]);
     }
+    for (const c of ingredients) {
+      if (c === 'Journeystone' && item.tags.includes('Translocation')) for (const stat of ['range', 'max_charges']) modifiers.push({ tag: 'Translocation', stat, amount: 6 });
+      if (c === 'Flame Blade Fragment' || c === 'Amaranthine Petal') for (const tag of item.tags) modifiers.push({ tag, stat: c === 'Flame Blade Fragment' ? 'damage' : 'duration', amount: c === 'Flame Blade Fragment' ? 3 : 1 });
+      if (c === 'Ironbark Plate' && item.tags.some(tag => ['Nature', 'Metallic'].includes(tag))) for (const t of ['Physical', 'Poison']) mods.resistances[t] = (mods.resistances[t] || 0) + 25;
+      if (c === 'Dragon Ambrosia' && item.tags.includes('Dragon')) modifiers.push({ tag: 'Dragon', stat: 'max_charges', amount: knownSpellIds(game).filter(id => spellById.get(id).tags.includes('Dragon')).length });
+    }
+    if (ingredients.includes('Chaos Seed') && item.tags.includes('Nature')) modifiers.push(...modifiers.filter(m => m.tag === 'Nature').map(m => ({ ...m, tag: 'Chaos' })));
+    if (ingredients.includes("Warlord's Skull")) for (const m of modifiers) m.stat = ({ damage: 'minion_damage', range: 'minion_range', duration: 'minion_duration', num_targets: 'num_summons' })[m.stat] || m.stat;
+    mods.bonuses.push(...modifiers);
     const desc = item.desc || '';
-    if (/quickstep|without ending your turn|step without/i.test(desc) || /Quickstep/i.test(item.name)) mods.quickstep = true;
+    if (item.name === 'Quickstep Boots') mods.quickstep = true;
     if (/move while channeling|Channel Boots/i.test(desc) || /Channel Boots/i.test(item.name)) mods.channelMove = true;
     if (/flying|Winged/i.test(item.name) || /gain flying/i.test(desc)) mods.flying = true;
     const qcMatch = desc.match(/cast (?:an? )?\[(\w+)\] spell without ending/i);
@@ -275,11 +261,11 @@ export function getEquipmentModifiers(game) {
     const resMatch = desc.match(/(\d+)% \[(\w+)\] resist/i);
     if (resMatch) mods.resistances[resMatch[2]] = (mods.resistances[resMatch[2]] || 0) + Number(resMatch[1]);
     if (/Each turn, a random enemy is acidified/i.test(desc)) mods.turnEffects.push({ type: 'acidify_random' });
-    const eachTurnDmg = desc.match(/Each turn.*deals? \[(\d+):damage\] \[(\w+)\] damage/i);
-    if (eachTurnDmg) mods.turnEffects.push({ type: 'damage_random', amount: Number(eachTurnDmg[1]), damageType: eachTurnDmg[2] });
+
   }
   // Check active buffs for flying/quickstep/resistances
   for (const buff of game.buffs || []) {
+    if (buff.type === 'bonus') mods.bonuses.push(buff);
     if (buff.flying) mods.flying = true;
     if (buff.quickstep) mods.quickstep = true;
     if (buff.type === 'resist' && buff.damageType) {
@@ -294,16 +280,25 @@ export function getUnitResistance(unit, damageType, game = null) {
   if (game && unit === game.player) {
     const mods = getEquipmentModifiers(game);
     res += mods.resistances[damageType] || 0;
+    if (game.mutators?.includes('vulnerability') && damageType === 'Physical') res -= 50;
   }
+  if (unit?.temporaryResistance?.tag === damageType) res += unit.temporaryResistance.amount;
+  if (unit?.vulnerable === damageType) res -= 100;
   const st = unit?.statuses || {};
+  res -= unit?.slimeRust || 0;
+  if (damageType === 'Arcane') res -= 100 * (unit?.conductivity?.length || 0);
   if (st.soaked > 0) {
     if (damageType === 'Lightning' || damageType === 'Ice') res -= 100;
     if (damageType === 'Fire') res += 50;
   }
+  if (st.twilight && ['Dark', 'Holy'].includes(damageType)) res -= 50;
+  if (st.pyrostatic && ['Fire', 'Lightning'].includes(damageType)) res -= 50;
+  if (st.ironize && ['Fire', 'Lightning', 'Physical'].includes(damageType)) res += 50;
   if (st.acidified > 0 && damageType === 'Poison') res -= 100;
   if (st.glassed > 0) res -= 100;
   if (st.petrify > 0 && damageType === 'Physical') res += 50;
   if (st.armor_melted > 0 && damageType === 'Physical') res -= 100;
+  if (unit?.name === 'Bafflement, Demon King') res = Math.abs(res);
   return Math.max(-100, Math.min(100, res));
 }
 
@@ -343,9 +338,22 @@ export function parseUpgradeEffects(upgrade) {
   return mods;
 }
 
+export function knownSpellIds(game) {
+  const items = new Set(getEquippedItems(game).map(item => item.name));
+  return [...new Set([...(game.rw3Spells || []).filter(id => !spellById.get(id)?.granted_by),
+    ...rw3Spells.filter(spell => items.has(spell.granted_by)).map(spell => spell.id)])];
+}
+
+export function transmutationChoices(name) {
+  const source = componentByName.get(name);
+  return source ? rw3Components.filter(c => c.name !== name && c.tags.some(tag => source.tags.includes(tag))) : [];
+}
+
 export function canLearnRw3Spell(game, spellId) {
   const spell = spellById.get(spellId);
   if (!spell || game.status !== 'playing') return false;
+  if (game.allowedSpells && !game.allowedSpells.includes(spellId)) return false;
+  if (spell.granted_by || game.mode === 'trial-scavenger') return false;
   if ((game.rw3Spells || []).includes(spellId)) return false;
   const mode = getModeConfig(game.mode);
   if (mode.allowedTags && !spell.tags.some(t => mode.allowedTags.includes(t))) return false;
@@ -355,7 +363,7 @@ export function canLearnRw3Spell(game, spellId) {
 export function canLearnRw3Upgrade(game, spellId, spId) {
   const spell = spellById.get(spellId);
   if (!spell || game.status !== 'playing') return false;
-  if (!(game.rw3Spells || []).includes(spellId)) return false;
+  if (!knownSpellIds(game).includes(spellId)) return false;
   const upgrade = (spell.upgrades || []).find(u => u.sp_id === spId);
   if (!upgrade) return false;
   if ((game.rw3Upgrades?.[spellId] || []).includes(spId)) return false;
@@ -364,6 +372,10 @@ export function canLearnRw3Upgrade(game, spellId, spId) {
 
 export function classifyRw3SpellBehavior(spell, tags) {
   const desc = (spell.desc || '').toLowerCase();
+  if (['Black Hole', 'Dispersion Field', 'Lightning Form', 'Flame Gate', 'Slime Form', 'Ride Drake'].includes(spell.name)) return 'special';
+  if (spell.tags.includes('Orb') && desc.startsWith('summon an orb')) return 'orb';
+  if (spell.name === 'Healing Light') return 'heal_allies';
+  if (['Magic Missile', 'Dominate', 'Death Bolt', 'Lifedrain', 'Shatter', 'Death Clock', 'Word of Beauty', 'Word of Ice', 'Word of Madness', 'Word of Chaos', 'Word of Undeath', 'Death Shock', 'Lumbriogenesis'].includes(spell.name)) return 'special';
   if (tags.includes('Translocation') && /teleport|swap|blink|ride drake|mounted/i.test(desc)) {
     if (/mount|ride drake/i.test(desc)) return 'self_buff';
     if (/teleport all units/i.test(desc)) return 'disperse';
@@ -384,6 +396,7 @@ export function effectiveRw3Spell(game, spellId) {
   const base = spellById.get(spellId);
   if (!base) return null;
   const stats = {
+    ...base.stats,
     range: base.stats?.range ?? 0,
     max_charges: base.stats?.max_charges ?? 0,
     hp_cost: base.stats?.hp_cost ?? 0,
@@ -391,8 +404,8 @@ export function effectiveRw3Spell(game, spellId) {
     radius: base.stats?.radius ?? 0,
     duration: base.stats?.duration ?? 0,
     shields: base.stats?.shields ?? 0,
-    num_targets: base.stats?.num_targets ?? 1,
-    num_summons: base.stats?.num_summons ?? 1,
+    num_targets: base.stats?.num_targets ?? 0,
+    num_summons: base.stats?.num_summons ?? 0,
     minion_health: base.stats?.minion_health ?? 0,
     minion_damage: base.stats?.minion_damage ?? 0,
     minion_duration: base.stats?.minion_duration ?? 0,
@@ -400,10 +413,11 @@ export function effectiveRw3Spell(game, spellId) {
     max_channel: base.stats?.max_channel ?? 0,
     shot_cooldown: base.stats?.shot_cooldown ?? 0,
   };
-  const tags = [...base.tags];
+  const tags = [...new Set([...base.tags, ...(game.spellBoosts?.[`rw3-${spellId}`]?.tags || [])])];
   const damageTypes = [...(base.damage_type || [])];
   let quickCast = !!base.quick_cast;
   let requiresLos = base.requires_los !== false;
+  if (game.buffs?.some(b => b.noLos)) requiresLos = false;
   const extraStatuses = [];
   const learnedUpgrades = game.rw3Upgrades?.[spellId] || [];
 
@@ -423,26 +437,33 @@ export function effectiveRw3Spell(game, spellId) {
 
   // Apply RW3 equipment bonuses matching any of this spell's tags
   const mods = getEquipmentModifiers(game);
+  const percentages = {};
   for (const bonus of mods.bonuses) {
-    if (!bonus.tag || tags.includes(bonus.tag)) {
-      if (bonus.stat in stats && (stats[bonus.stat] > 0 || ['damage', 'max_charges', 'range', 'shields'].includes(bonus.stat))) {
-        stats[bonus.stat] = Math.max(0, stats[bonus.stat] + bonus.amount);
-      }
-    }
+    if ((bonus.tag && !tags.includes(bonus.tag)) || (bonus.spellId && bonus.spellId !== spellId)) continue;
+    if (!stats[bonus.stat] && !Object.hasOwn(base.stats, bonus.stat)) continue;
+    if (bonus.percent) percentages[bonus.stat] = (percentages[bonus.stat] || 0) + bonus.amount;
+    else stats[bonus.stat] += bonus.amount;
   }
+  for (const [stat, percent] of Object.entries(percentages)) stats[stat] = Math.max(0, Math.floor(stats[stat] * (1 + percent / 100)));
+  if (game.buffs?.some(b => b.quickcastAll)) quickCast = true;
   for (const tag of tags) if (mods.quickcastTags.has(tag)) quickCast = true;
 
   // Apply Shrine of Empowerment permanent spell boosts
   const boost = game.spellBoosts?.[`rw3-${spellId}`];
   if (boost) {
+    if (boost.quickCast) quickCast = true;
+    if (boost.voidMutations) for (const k of ['minion_health', 'minion_damage', 'minion_range']) stats[k] = Math.floor(stats[k] * (1 + boost.voidMutations / 100));
+    if (boost.range && stats.range) stats.range += boost.range;
     if (boost.damage && stats.damage > 0) stats.damage += boost.damage;
     if (boost.minion_damage && stats.minion_damage > 0) stats.minion_damage += boost.minion_damage;
     if (boost.max_charges && stats.max_charges > 0) stats.max_charges += boost.max_charges;
   }
 
+  if (stats.damage > 0 && game.mutators?.includes('damageDebuff')) stats.damage = Math.max(1, Math.floor(stats.damage * 0.75));
+  if (base.name === 'Lumbriogenesis' && base.upgrades.some(up => up.name === 'Worm Host' && learnedUpgrades.includes(up.sp_id))) stats.max_charges = 0;
   const primaryTag = tags[0] || 'Arcane';
   const meta = TAG_META[primaryTag] || TAG_META.Arcane;
-  const behavior = classifyRw3SpellBehavior(base, tags);
+  const behavior = classifyRw3SpellBehavior(base, base.tags);
 
   return {
     id: `rw3-${base.id}`,
@@ -468,6 +489,8 @@ export function effectiveRw3Spell(game, spellId) {
     desc: base.desc,
     upgrades: base.upgrades || [],
     learnedUpgrades,
+    upgradeNames: base.upgrades.filter(up => learnedUpgrades.includes(up.sp_id)).map(up => up.name),
+    summons: base.summons || [],
     color: meta.color,
     icon: meta.icon,
   };
@@ -475,7 +498,7 @@ export function effectiveRw3Spell(game, spellId) {
 
 export function craftableEquipment(game) {
   const inv = game.rw3Components || [];
-  return rw3Equipment.filter(item => !!findMatchingComponents(inv, item));
+  return rw3Equipment.filter(item => (!game.allowedEquipment || game.allowedEquipment.includes(item.name)) && !!findMatchingComponents(inv, item));
 }
 
 export { rw3Components, rw3Equipment, rw3Spells, rw3Tags };
