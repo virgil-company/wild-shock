@@ -1,13 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { t, setLocale, getLocale, locales, localeOptions } from '../src/i18n.js';
-import { nodes, schools, paths } from '../src/catalog.js';
-import { rw3Components, rw3Equipment } from '../src/rw3-catalog.js';
-import { artifacts } from '../src/artifacts.js';
-import { namedKey } from '../src/text-keys.js';
-import { nodeName, nodeDescription, logText } from '../src/game-text.js';
-import { createGame, wait, serialize, restore } from '../src/engine.js';
+import { t, setLocale, getLocale, locales, localeOptions } from '../src/i18n/i18n.js';
+import { nodes, schools, paths } from '../src/data/catalog.js';
+import { rw3Components, rw3Equipment } from '../src/data/rw3-catalog.js';
+import { artifacts } from '../src/data/artifacts.js';
+import { namedKey } from '../src/i18n/text-keys.js';
+import { nodeName, nodeDescription, logText } from '../src/i18n/game-text.js';
+import { createGame, wait, serialize, restore } from '../src/engine/index.js';
 
 const placeholders = value => [...value.matchAll(/\{(\w+)\}/g)].map(match => match[1]).sort();
 

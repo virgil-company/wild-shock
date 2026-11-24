@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createGame, generateRealm, move, cast, wait, drink, learnRw3Spell, learnRw3Upgrade, restore, serialize, availableSpells, maxHealth, FINAL_REALM, SIZE, hasSight, shortestPath } from '../src/engine.js';
+import { createGame, generateRealm, move, cast, wait, drink, learnRw3Spell, learnRw3Upgrade, restore, serialize, availableSpells, maxHealth, FINAL_REALM, SIZE, hasSight, shortestPath } from '../src/engine/index.js';
 
 function arena() {
   const game = createGame(42);

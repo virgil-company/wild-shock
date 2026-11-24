@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import {
   createGame, generateRealm, availableSpells, cast, move, wait,
   learnRw3Spell, learnRw3Upgrade, deploy, restore, serialize, SIZE, tagMastery,
-} from '../src/engine.js';
-import { spellByName, effectiveRw3Spell } from '../src/rw3.js';
-import { units, unitStats } from '../src/bestiary.js';
+} from '../src/engine/index.js';
+import { spellByName, effectiveRw3Spell } from '../src/rules/rw3.js';
+import { units, unitStats } from '../src/data/bestiary.js';
 
 function arena(mode = 'rw3') {
   const game = createGame(31, { mode });

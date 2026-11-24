@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createGame, generateRealm, useShrine, move, serialize, restore, previewPortal, threateningEnemies, FINAL_REALM, SIZE } from '../src/engine.js';
+import { createGame, generateRealm, useShrine, move, serialize, restore, previewPortal, threateningEnemies, FINAL_REALM, SIZE } from '../src/engine/index.js';
 
 function arena() {
   const g = createGame(42);

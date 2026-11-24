@@ -2,12 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createGame, cast, move, wait, learnRw3Spell, learnRw3Upgrade, useShrine, forge as engineForge,
-  availableSpells, finalRealmOf, hasSight, SIZE, serialize, restore,
-} from '../src/engine.js';
+  availableSpells, finalRealmOf, hasSight, SIZE, serialize, restore, applyComponentPickupEffects,
+} from '../src/engine/index.js';
 import {
   catalogueCounts, recipeMatches, canForge, forge, addComponent, equipmentByName,
-  effectiveRw3Spell, computeElementalDamage, applyComponentPickupEffects, findMatchingComponents,
-} from '../src/rw3.js';
+  effectiveRw3Spell, computeElementalDamage, findMatchingComponents,
+} from '../src/rules/rw3.js';
 
 function cleanArena(mode = 'standard') {
   const g = createGame(42, { mode });

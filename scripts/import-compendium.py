@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 source = json.loads(Path(sys.argv[1]).read_text())
-destination = Path(__file__).resolve().parents[1] / "src" / "rw3-catalog.js"
+destination = Path(__file__).resolve().parents[1] / "src" / "data" / "rw3-catalog.js"
 
 
 def select(record, fields):

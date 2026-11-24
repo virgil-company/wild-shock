@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import {
   createGame, generateRealm, availableSpells, cast, move, wait, learnRw3Spell, learnRw3Upgrade,
   applyComponentPickupEffects, deploy, claimReward, rerollRifts, previewPortal, forge, useShrine, restore, serialize, SIZE,
-} from '../src/engine.js';
-import { spellByName, findMatchingComponents, recipeMatches, rw3Equipment, rw3Components, effectiveRw3Spell, getUnitResistance } from '../src/rw3.js';
-import { rw3Spells, rw3Units, wardrobe } from '../src/rw3-catalog.js';
-import { units, searchCatalogue, covers, unitStats } from '../src/bestiary.js';
-import { vaults, outfitUnlocks } from '../src/campaign.js';
+} from '../src/engine/index.js';
+import { spellByName, findMatchingComponents, recipeMatches, rw3Equipment, rw3Components, effectiveRw3Spell, getUnitResistance } from '../src/rules/rw3.js';
+import { rw3Spells, rw3Units, wardrobe } from '../src/data/rw3-catalog.js';
+import { units, searchCatalogue, covers, unitStats } from '../src/data/bestiary.js';
+import { vaults, outfitUnlocks } from '../src/data/campaign.js';
 
 function arena(mode = 'standard') {
   const game = createGame(31, { mode });

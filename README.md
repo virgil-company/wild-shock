@@ -49,7 +49,7 @@ The public catalog contains tooltips, stats and recipes. Some conditional upgrad
 
 ## Catalog maintenance
 
-Download the desired dataset listed in the compendium build manifest and run `python3 scripts/import-compendium.py /path/to/data.beta.json`. The generated catalog includes the build ID and branch. The browser uses the bundled data offline after the page has loaded. Combat behavior is implemented separately in `src/engine.js`, `src/spell-effects.js`, `src/equipment-effects.js`, `src/component-effects.js` and `src/bestiary.js`.
+Download the desired dataset listed in the compendium build manifest and run `python3 scripts/import-compendium.py /path/to/data.beta.json`. The generated catalog includes the build ID and branch. The browser uses the bundled data offline after the page has loaded. Combat behavior is implemented separately in `src/engine/`, `src/rules/` (`rw3.js`, `spell-effects.js`, `equipment-effects.js`, `component-effects.js`) and `src/data/bestiary.js`.
 
 ## GitHub Pages
 
