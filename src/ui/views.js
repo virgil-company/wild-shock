@@ -1,7 +1,13 @@
 import { wardrobe } from '../data/catalog.js';
 import { outfitUnlocks } from '../data/campaign.js';
 import { covers, searchCatalogue, units } from '../data/bestiary.js';
-import { componentName, enemyName, equipmentName, logText, schoolName } from '../i18n/game-text.js';
+import {
+  abilityDesc, abilityName, behaviorName, buffName, cloudName, componentDesc,
+  componentName, damageTypeName, damageTypeShort, enemyName, equipmentBonusText,
+  equipmentDesc, equipmentName, grimoireSpellDesc, grimoireSpellName, logText,
+  outfitName, outfitUnlock, passiveText, schoolName, statusName, tagName,
+  unitName, upgradeDesc, upgradeName, vaultName,
+} from '../i18n/game-text.js';
 import { t } from '../i18n/i18n.js';
 import {
   availableSpells, cancelChannel, claimReward, distance, finalRealmOf,
@@ -24,7 +30,7 @@ import { $, cleanCatalogDesc, escapeHtml, h } from './dom.js';
 export function initStaticIcons() {
   const bindings = [
     ['brand-mark-icon', uiIconSvg('brand', 34)],
-    ['wizard-portrait', wizardPortraitSvg()],
+    ['wizard-portrait', wizardPortraitSvg('Wizard', outfitName('Wizard'))],
     ['icon-vitality', uiIconSvg('heart', 14)],
     ['icon-shields', uiIconSvg('shield', 13)],
     ['icon-ward', uiIconSvg('ward', 13)],
@@ -62,12 +68,12 @@ export function renderHeading(view) {
 export function populateFilters() {
   const tagSel = $('tag-filter');
   const prevTag = tagSel.value || 'all';
-  tagSel.innerHTML = `<option value="all">${h('compendium.allTags')}</option>` + tags.map(tag => `<option value="${escapeHtml(tag)}">${escapeHtml(tag)}</option>`).join('');
+  tagSel.innerHTML = `<option value="all">${h('compendium.allTags')}</option>` + tags.map(tag => `<option value="${escapeHtml(tag)}">${escapeHtml(tagName(tag))}</option>`).join('');
   tagSel.value = prevTag;
 
   const lvlSel = $('level-filter');
   const prevLvl = lvlSel.value || 'all';
-  lvlSel.innerHTML = `<option value="all">${h('compendium.allLevels')}</option>` + [1, 2, 3, 4, 5, 6, 7, 8, 9].map(l => `<option value="${l}">Lvl ${l}</option>`).join('');
+  lvlSel.innerHTML = `<option value="all">${h('compendium.allLevels')}</option>` + [1, 2, 3, 4, 5, 6, 7, 8, 9].map(l => `<option value="${l}">${h('compendium.levelOption', { level: l })}</option>`).join('');
   lvlSel.value = prevLvl;
 
   const slotSel = $('slot-filter');
@@ -81,13 +87,13 @@ export function renderResistances(game, unit) {
     const val = getUnitResistance(unit, dt, unit === game.player ? game : null);
     if (!val) return '';
     const cls = val >= 100 ? 'immune' : val < 0 ? 'weak' : '';
-    return `<span class="res-badge ${cls}">${dt.slice(0, 3)} ${val > 0 ? '+' : ''}${val}%</span>`;
+    return `<span class="res-badge ${cls}">${escapeHtml(damageTypeShort(dt))} ${val > 0 ? '+' : ''}${val}%</span>`;
   }).filter(Boolean);
   return badges.length ? `<div class="res-grid">${badges.join('')}</div>` : '';
 }
 
 function renderStatuses(unit) {
-  const chips = Object.entries(unit.statuses || {}).filter(([, v]) => v > 0).map(([k, v]) => `<span class="status-chip">${escapeHtml(k)} ${v}t</span>`);
+  const chips = Object.entries(unit.statuses || {}).filter(([, v]) => v > 0).map(([k, v]) => `<span class="status-chip">${escapeHtml(statusName(k))} ${h('stats.turnsShort', { n: v })}</span>`);
   return chips.length ? `<div class="res-grid">${chips.join('')}</div>` : '';
 }
 
@@ -116,23 +122,24 @@ export function renderInspection(state, p) {
     const nextAction = enemy.isSpawner ? t('inspection.spawnerDesc', { cooldown: enemy.spawnCooldown })
       : enemy.statuses.freeze || enemy.statuses.stun || enemy.statuses.petrify ? t('inspection.frozen')
       : distance(enemy, game.player) <= enemy.range && hasSight(game, enemy, game.player) ? t('inspection.attack') : t('inspection.approach');
-    const title = enemy.isSpawner ? t('inspection.spawner') : enemy.species || (enemy.isFinalBoss ? 'Mordred' : enemyName(enemy));
+    const title = enemy.isSpawner ? t('inspection.spawner') : enemy.species ? unitName(enemy.species) : (enemy.isFinalBoss ? unitName('Mordred') : enemyName(enemy));
     const unitDef = !enemy.isSpawner ? (units.get(enemy.species) || (enemy.isFinalBoss ? units.get('Mordred') : null) || enemy) : null;
     const iconHtml = enemy.isSpawner ? entityIconSvg('lair', 36) : unitIconSvg(unitDef, 36);
-    panel.innerHTML = `<div class="inspect-head"><div class="inspect-symbol">${iconHtml}</div><div><h3>${escapeHtml(title)}${enemy.shields ? ` <span class="cyan-val">[${enemy.shields} SH]</span>` : ''}</h3><p style="margin:2px 0 0;color:var(--gold)">${escapeHtml(nextAction)}</p></div></div><p>${h('inspection.enemyStats', enemy)}</p>${renderResistances(game, enemy)}${renderStatuses(enemy)}`;
+    panel.innerHTML = `<div class="inspect-head"><div class="inspect-symbol">${iconHtml}</div><div><h3>${escapeHtml(title)}${enemy.shields ? ` <span class="cyan-val">[${enemy.shields} ${h('stats.sh')}]</span>` : ''}</h3><p style="margin:2px 0 0;color:var(--gold)">${escapeHtml(nextAction)}</p></div></div><p>${h('inspection.enemyStats', enemy)}</p>${renderResistances(game, enemy)}${renderStatuses(enemy)}`;
   } else if (ally) {
     const allyDef = units.get(ally.species || ally.name) || { ...ally, is_companion: true };
-    panel.innerHTML = `<div class="inspect-head"><div class="inspect-symbol">${unitIconSvg(allyDef, 36)}</div><div><h3>${escapeHtml(ally.name)}</h3><p style="margin:2px 0 0;color:var(--green)">${h('inspection.ally')}</p></div></div><p>HP ${ally.hp}/${ally.maxHp} · DMG ${ally.damage} · R${ally.range}${ally.shields ? ` · ${ally.shields} SH` : ''}${ally.duration ? ` · ${ally.duration}t` : ''}</p>${renderResistances(game, ally)}`;
+    const allyStats = `${h('inspection.allyStats', ally)}${ally.shields ? ` · ${ally.shields} ${h('stats.sh')}` : ''}${ally.duration ? ` · ${h('stats.turnsShort', { n: ally.duration })}` : ''}`;
+    panel.innerHTML = `<div class="inspect-head"><div class="inspect-symbol">${unitIconSvg(allyDef, 36)}</div><div><h3>${escapeHtml(unitName(ally.name))}</h3><p style="margin:2px 0 0;color:var(--green)">${h('inspection.ally')}</p></div></div><p>${allyStats}</p>${renderResistances(game, ally)}`;
   } else if (p && game.portals.some(r => distance(r, p) === 0)) {
     const portal = game.portals.find(r => distance(r, p) === 0);
     const next = getPortalPreview(game, portal);
     const preview = next ? [
       h('inspection.nextRealm', { enemies: next.enemies, boss: next.boss ? t('inspection.boss') : '' }),
-      next.vault ? h('vault.name', { name: next.vault }) : '',
-      escapeHtml(next.species.join(', ')),
+      next.vault ? h('vault.name', { name: vaultName(next.vault) }) : '',
+      escapeHtml(next.species.map(unitName).join(', ')),
       h('inspection.affinities', { schools: next.schools.map(schoolName).join(', ') }),
       h('inspection.shrines', { shrines: t(`shrine.${next.shrine}`) }),
-      next.components?.length ? `${h('wiki.filter.itemComponent')}: ${next.components.map(componentName).join(', ')}` : '',
+      next.components?.length ? `${h('wiki.filter.itemComponent')}: ${escapeHtml(next.components.map(componentName).join(', '))}` : '',
     ].filter(Boolean).join('<br>') : h('inspection.finalPortal');
     panel.innerHTML = `<div class="inspect-head"><div class="inspect-symbol">${entityIconSvg(portal.theme ? 'portal-ember' : 'portal-moss', 36)}</div><div><h3>${h(portal.theme ? 'inspection.emberfallRift' : 'inspection.mossboundRift')}</h3><p style="margin:2px 0 0">${h(game.enemies.length ? 'inspection.portalLocked' : 'inspection.portalOpen')}</p></div></div><p>${preview}</p>`;
   } else if (p && game.shrine && distance(game.shrine, p) === 0) {
@@ -145,18 +152,20 @@ export function renderInspection(state, p) {
       : item.type === 'component' && item.material ? pickupIconSvg(item.material, 36)
       : item.type === 'companion' ? unitIconSvg(units.get(item.name) || { name: item.name, is_companion: true }, 36)
       : pickupIconSvg(item.type, 36);
-    const description = item.type === 'companion' ? t('item.companion', { name: item.name })
-      : item.type === 'tome' ? t('item.tome', { spell: spellById.get(Number(String(item.spellId).replace(/^spell-/, '')))?.name })
-      : (item.type === 'scroll' || item.type === 'chest') ? item.options.map(c => item.type === 'scroll' ? spellById.get(c).name : equipmentName(c)).join(' · ')
-      : item.type === 'component' && item.name ? `${componentName(item.name)}${comp?.desc ? ` — ${cleanCatalogDesc(comp.desc)}` : ''}`
+    const compDescription = comp ? componentDesc(comp) : '';
+    const description = item.type === 'companion' ? t('item.companion', { name: unitName(item.name) })
+      : item.type === 'tome' ? t('item.tome', { spell: grimoireSpellName(item.spellId) })
+      : (item.type === 'scroll' || item.type === 'chest') ? item.options.map(c => item.type === 'scroll' ? grimoireSpellName(c) : equipmentName(c)).join(' · ')
+      : item.type === 'component' && item.name ? `${componentName(item.name)}${compDescription ? ` — ${compDescription}` : ''}`
       : item.type === 'component' ? t('inspection.material', { material: t(`materials.${item.material}`) })
       : t(item.type === 'shard' ? 'inspection.shard' : 'inspection.potion');
     panel.innerHTML = `<div class="inspect-head"><div class="inspect-symbol">${itemIconHtml}</div><div><h3>${escapeHtml(item.type === 'component' && item.name ? componentName(item.name) : t('pickup.' + item.type))}</h3></div></div><p>${escapeHtml(description)}</p>`;
   } else if (p && distance(game.player, p) === 0) {
-    panel.innerHTML = `<div class="inspect-head"><div class="inspect-symbol" style="overflow:hidden;padding:0">${wizardPortraitSvg(game.player.outfit || 'Wizard')}</div><div><h3>${h('inspection.player')}</h3><p style="margin:2px 0 0"><span class="cyan-val">${game.player.shields || 0} SH</span></p></div></div><p>${h('inspection.playerHealth', { hp: game.player.hp, maxHp: maxHealth(game), ward: game.player.shield })}<br>${h('inspection.playerResources', { points: game.points, potions: game.potions })}</p>${renderResistances(game, game.player)}`;
+    const outfit = game.player.outfit || 'Wizard';
+    panel.innerHTML = `<div class="inspect-head"><div class="inspect-symbol" style="overflow:hidden;padding:0">${wizardPortraitSvg(outfit, outfitName(outfit))}</div><div><h3>${h('inspection.player')}</h3><p style="margin:2px 0 0"><span class="cyan-val">${game.player.shields || 0} ${h('stats.sh')}</span></p></div></div><p>${h('inspection.playerHealth', { hp: game.player.hp, maxHp: maxHealth(game), ward: game.player.shield })}<br>${h('inspection.playerResources', { points: game.points, potions: game.potions })}</p>${renderResistances(game, game.player)}`;
   } else if (cloud) {
     const def = CLOUD_TYPES[cloud.type] || CLOUD_TYPES.fire;
-    panel.innerHTML = `<div class="inspect-head"><div class="inspect-symbol">${cloudIconSvg(cloud.type, 36)}</div><div><h3>${escapeHtml(def.name)}</h3></div></div><p>${h('inspection.cloud')} · ${cloud.duration}t${cloud.damage ? ` · ${cloud.damage} ${cloud.damageType}` : ''}</p>`;
+    panel.innerHTML = `<div class="inspect-head"><div class="inspect-symbol">${cloudIconSvg(cloud.type, 36)}</div><div><h3>${escapeHtml(cloudName(cloud.type, def.name))}</h3></div></div><p>${h('inspection.cloud')} · ${h('stats.turnsShort', { n: cloud.duration })}${cloud.damage ? ` · ${cloud.damage} ${escapeHtml(damageTypeName(cloud.damageType))}` : ''}</p>`;
   } else if (p && game.tiles[p.y]?.[p.x] === 2) {
     panel.innerHTML = `<div class="inspect-head"><div class="inspect-symbol">${entityIconSvg('chasm', 36)}</div><div><h3>${h('inspection.chasm')}</h3></div></div><p>${h('inspection.chasmDesc')}</p>`;
   } else {
@@ -174,7 +183,7 @@ export function renderShrineResult(game) {
     : offering ? (componentByName.get(name)?.tags || [])
     : transmutationChoices(name).map(c => c.name);
   select.hidden = !['spellgraft', 'offering', 'transmutation'].includes(game.shrine?.type) || !choices.length;
-  if (!select.hidden) select.replaceChildren(...choices.map(value => new Option(offering || graft ? value : componentName(value), value)));
+  if (!select.hidden) select.replaceChildren(...choices.map(value => new Option(offering || graft ? tagName(value) : componentName(value), value)));
 }
 
 export function renderForgeSidebar(state) {
@@ -207,7 +216,7 @@ export function renderForgeSidebar(state) {
   } else if (['empowerment', 'haste', 'spellgraft'].includes(sType)) {
     sel.hidden = false;
     const spells = availableSpells(game).filter(s => sType !== 'haste' || !s.quickCast);
-    sel.innerHTML = spells.map(s => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)}</option>`).join('');
+    sel.innerHTML = spells.map(s => `<option value="${escapeHtml(s.id)}">${escapeHtml(grimoireSpellName(s))}</option>`).join('');
     $('shrine-activate-button').disabled = game.status !== 'playing' || !near || !shrine?.uses || !spells.length;
   } else {
     sel.hidden = true;
@@ -234,9 +243,11 @@ export function renderHud(state, { onRender, onSaveProfile }) {
   }
   game.player.outfit = profile.selected;
   const portraitEl = $('wizard-portrait');
-  if (portraitEl && portraitEl.dataset.outfit !== (profile.selected || 'Wizard')) {
-    portraitEl.dataset.outfit = profile.selected || 'Wizard';
-    portraitEl.innerHTML = wizardPortraitSvg(profile.selected || 'Wizard');
+  const outfitId = profile.selected || 'Wizard';
+  const outfitLabel = outfitName(outfitId);
+  if (portraitEl && portraitEl.dataset.outfit !== `${outfitId}:${outfitLabel}`) {
+    portraitEl.dataset.outfit = `${outfitId}:${outfitLabel}`;
+    portraitEl.innerHTML = wizardPortraitSvg(outfitId, outfitLabel);
   }
 
   const reward = game.pendingReward;
@@ -247,7 +258,7 @@ export function renderHud(state, { onRender, onSaveProfile }) {
       const isScroll = reward.type === 'scroll';
       const itemDef = isScroll ? spellById.get(choice) : equipmentByName.get(choice);
       const iconHtml = isScroll ? spellIconSvg(itemDef, 26) : equipmentIconSvg(itemDef, 26);
-      const label = isScroll ? (itemDef?.name || String(choice)) : equipmentName(choice);
+      const label = isScroll ? grimoireSpellName(itemDef || choice) : equipmentName(choice);
       button.innerHTML = `${iconHtml}<span>${escapeHtml(label)}</span>`;
       button.onclick = () => { if (claimReward(game, choice)) { $('reward-dialog').close(); onRender(); } };
       return button;
@@ -273,7 +284,7 @@ export function renderHud(state, { onRender, onSaveProfile }) {
   $('realm-number').textContent = String(game.realm).padStart(2, '0');
   $('realm-total').textContent = t('realm.ofTotal', { total: maxR });
   $('turn-label').textContent = t('realm.turn', { turn: String(game.turn + 1).padStart(3, '0') });
-  $('realm-name').textContent = game.vault ? t('vault.name', { name: game.vault }) : t(game.theme ? 'realm.emberfall' : 'realm.mossbound');
+  $('realm-name').textContent = game.vault ? t('vault.name', { name: vaultName(game.vault) }) : t(game.theme ? 'realm.emberfall' : 'realm.mossbound');
   $('enemy-count').textContent = game.enemies.length;
   $('reroll-rifts').textContent = t('rift.reroll', { count: game.rerolls });
   $('reroll-rifts').disabled = game.status !== 'playing' || !game.rerolls || game.realm >= maxR;
@@ -286,9 +297,9 @@ export function renderHud(state, { onRender, onSaveProfile }) {
   if (mods.quickstep && !game.quickstepUsed) banners.push(`<div class="banner-chip quickstep"><span>⇄ ${h('player.quickstepReady')}</span></div>`);
   if (game.channel) {
     const chSpell = knownSpells.find(s => s.id === game.channel.spellId);
-    banners.push(`<div class="banner-chip channel"><span>❂ ${h('player.channeling', { spell: chSpell?.name || '', turns: game.channel.turnsLeft })}</span><button id="cancel-channel-btn">${h('player.cancelChannel')}</button></div>`);
+    banners.push(`<div class="banner-chip channel"><span>❂ ${h('player.channeling', { spell: chSpell ? grimoireSpellName(chSpell) : '', turns: game.channel.turnsLeft })}</span><button id="cancel-channel-btn">${h('player.cancelChannel')}</button></div>`);
   }
-  for (const buff of game.buffs || []) banners.push(`<div class="banner-chip"><span>✦ ${escapeHtml(buff.name)}</span><small>${buff.duration < 0 ? '∞' : buff.duration + 't'}</small></div>`);
+  for (const buff of game.buffs || []) banners.push(`<div class="banner-chip"><span>✦ ${escapeHtml(buffName(buff.name))}</span><small>${buff.duration < 0 ? '∞' : h('stats.turnsShort', { n: buff.duration })}</small></div>`);
   $('status-banners').innerHTML = banners.join('');
   if ($('cancel-channel-btn')) $('cancel-channel-btn').onclick = () => { cancelChannel(game); onRender(); };
 
@@ -296,12 +307,12 @@ export function renderHud(state, { onRender, onSaveProfile }) {
   $('spell-list').innerHTML = knownSpells.map((s, i) => {
     const charges = game.charges[s.id] ?? 0;
     const canUse = game.status === 'playing' && (s.maxCharges === 0 || charges > 0) && (!s.hpCost || game.player.hp > s.hpCost);
-    const meta = `${s.damage ? `${s.damage} DMG` : s.behavior.toUpperCase()} · R${s.range}${s.radius ? ` · A${s.radius}` : ''}${s.hpCost ? ` · -${s.hpCost}HP` : ''}${s.quickCast ? ' · ⚡QC' : ''}`;
+    const meta = `${s.damage ? `${s.damage} ${t('stats.dmg')}` : behaviorName(s.behavior)} · ${t('stats.rangeShort', { n: s.range })}${s.radius ? ` · ${t('stats.areaShort', { n: s.radius })}` : ''}${s.hpCost ? ` · -${s.hpCost}${t('stats.hp')}` : ''}${s.quickCast ? ` · ⚡${t('stats.quickCastShort')}` : ''}`;
     const chargeText = s.maxCharges === 0 ? '∞' : `${charges}/${s.maxCharges}`;
-    const tooltip = cleanCatalogDesc(s.desc);
+    const tooltip = grimoireSpellDesc(s);
     return `<button class="spell ${state.selected === s.id ? 'selected' : ''}" data-spell="${s.id}" data-tooltip="${escapeHtml(tooltip)}" aria-pressed="${state.selected === s.id}" ${canUse ? '' : 'disabled'}>
       <span class="spell-icon" style="border-color:${s.color}55">${spellIconSvg(s, 26)}</span>
-      <span class="spell-text"><strong>${escapeHtml(s.name)}</strong><small>${escapeHtml(meta)}</small></span>
+      <span class="spell-text"><strong>${escapeHtml(grimoireSpellName(s))}</strong><small>${escapeHtml(meta)}</small></span>
       <span class="spell-meta-right">${chargeText}${i < 9 ? `<br><span class="spell-hotkey">${i + 1}</span>` : ''}</span>
     </button>`;
   }).join('');
@@ -333,7 +344,7 @@ export function renderHud(state, { onRender, onSaveProfile }) {
   const tagCounts = {};
   for (const s of knownSpells) for (const tg of s.tags) tagCounts[tg] = (tagCounts[tg] || 0) + 1;
   const topTag = Object.entries(tagCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'Arcane';
-  $('build-label').textContent = `${topTag} · ${game.spells?.length || 0}`;
+  $('build-label').textContent = `${tagName(topTag)} · ${game.spells?.length || 0}`;
 
   $('outcome').hidden = game.status === 'playing';
   if (game.status !== 'playing') {
@@ -364,7 +375,10 @@ export function renderGrimoire(state) {
     if (lvl !== 'all' && String(s.level) !== lvl) return false;
     if (status === 'learned' && !learnedSet.has(s.id)) return false;
     if (status === 'available' && !canLearnSpell(game, s.id)) return false;
-    if (q && !searchCatalogue(q, [s.name, ...s.tags, s.desc, s.granted_by || ''], s.summons)) return false;
+    if (q && !searchCatalogue(q, [
+      s.name, grimoireSpellName(s), ...s.tags, ...s.tags.map(tagName),
+      s.desc, grimoireSpellDesc(s), s.granted_by || '', s.granted_by ? equipmentName(s.granted_by) : '',
+    ], s.summons)) return false;
     return true;
   });
 
@@ -374,24 +388,24 @@ export function renderGrimoire(state) {
     const upCount = (game.spellUpgrades?.[s.id] || []).length;
     const primaryTag = s.tags?.[0] || 'Arcane';
     const primaryColor = (TAG_META[primaryTag] || TAG_META.Arcane).color;
-    const tagPills = s.tags.map(tg => `<span class="tag-pill" style="color:${(TAG_META[tg] || TAG_META.Arcane).color}">${tagIconSvg(tg, 12)}<span>${escapeHtml(tg)}</span></span>`).join('');
+    const tagPills = s.tags.map(tg => `<span class="tag-pill" style="color:${(TAG_META[tg] || TAG_META.Arcane).color}">${tagIconSvg(tg, 12)}<span>${escapeHtml(tagName(tg))}</span></span>`).join('');
     const statsParts = [];
-    if (s.stats?.damage) statsParts.push(`DMG ${s.stats.damage}`);
-    if (s.stats?.range) statsParts.push(`RNG ${s.stats.range}`);
-    if (s.stats?.max_charges) statsParts.push(`CHG ${s.stats.max_charges}`);
-    if (s.stats?.hp_cost) statsParts.push(`HP -${s.stats.hp_cost}`);
-    if (s.stats?.minion_health) statsParts.push(`MINION ${s.stats.minion_health}HP`);
+    if (s.stats?.damage) statsParts.push(`${t('stats.dmg')} ${s.stats.damage}`);
+    if (s.stats?.range) statsParts.push(`${t('stats.rng')} ${s.stats.range}`);
+    if (s.stats?.max_charges) statsParts.push(`${t('stats.chg')} ${s.stats.max_charges}`);
+    if (s.stats?.hp_cost) statsParts.push(`${t('stats.hp')} -${s.stats.hp_cost}`);
+    if (s.stats?.minion_health) statsParts.push(`${t('stats.minion')} ${s.stats.minion_health} ${t('stats.hp')}`);
     return `<div class="catalog-card ${isLearned ? 'learned-card' : ''}">
       <div class="catalog-card-head">
         <div class="catalog-card-title-group">
           <span class="card-emblem" style="border-color:${primaryColor}55">${spellIconSvg(s, 30)}</span>
-          <h3>${escapeHtml(s.name)}</h3>
+          <h3>${escapeHtml(grimoireSpellName(s))}</h3>
         </div>
-        <span class="catalog-badge">${isLearned ? h('compendium.learnedBadge') : `LVL ${s.level} · ${s.level} SP`}</span>
+        <span class="catalog-badge">${isLearned ? h('compendium.learnedBadge') : h('compendium.levelCostBadge', { level: s.level, cost: s.level })}</span>
       </div>
       <div class="chip-wrap">${tagPills}</div>
       <div class="catalog-stats-line">${statsParts.map(x => `<span>${escapeHtml(x)}</span>`).join('')}</div>
-      <p class="catalog-desc">${escapeHtml(cleanCatalogDesc(s.desc))}</p>
+      <p class="catalog-desc">${escapeHtml(grimoireSpellDesc(s))}</p>
       <div class="catalog-card-actions">
         ${s.granted_by && !isLearned ? h('book.requires', { item: equipmentName(s.granted_by) }) : isLearned ? '' : `<button class="primary" data-learn-spell="${s.id}" ${canBuy ? '' : 'disabled'}>${h('compendium.learnSpell', { cost: s.level })}</button>`}
         <button data-inspect-spell="${s.id}">${h('compendium.upgrades')} (${upCount}/${(s.upgrades || []).length})</button>
@@ -408,31 +422,30 @@ export function showSpellDetail(state, spellId, onRender) {
   const eff = effectiveSpell(game, spellId);
   const isLearned = knownSpellIds(game).includes(spellId);
   const learnedUps = new Set(game.spellUpgrades?.[spellId] || []);
-  const primaryTag = eff.tags?.[0] || 'Arcane';
-  const tagPills = eff.tags.map(tg => `<span class="tag-pill" style="color:${(TAG_META[tg] || TAG_META.Arcane).color}">${tagIconSvg(tg, 12)}<span>${escapeHtml(tg)}</span></span>`).join('');
+  const tagPills = eff.tags.map(tg => `<span class="tag-pill" style="color:${(TAG_META[tg] || TAG_META.Arcane).color}">${tagIconSvg(tg, 12)}<span>${escapeHtml(tagName(tg))}</span></span>`).join('');
   const upsHtml = (base.upgrades || []).map(u => {
     const owned = learnedUps.has(u.sp_id);
     const canBuy = canLearnUpgrade(game, spellId, u.sp_id);
     return `<div class="upgrade-item ${owned ? 'learned' : ''}">
-      <div class="upgrade-item-head"><strong>${escapeHtml(u.name)}</strong><span class="catalog-badge">${owned ? h('compendium.learnedBadge') : `${u.level} SP`}</span></div>
-      <p class="catalog-desc">${escapeHtml(cleanCatalogDesc(u.desc))}</p>
+      <div class="upgrade-item-head"><strong>${escapeHtml(upgradeName(u))}</strong><span class="catalog-badge">${owned ? h('compendium.learnedBadge') : h('compendium.spCost', { cost: u.level })}</span></div>
+      <p class="catalog-desc">${escapeHtml(upgradeDesc(u))}</p>
       ${owned ? '' : `<button class="primary" data-buy-upgrade="${spellId}:${u.sp_id}" ${canBuy ? '' : 'disabled'}>${h('compendium.upgradeSpell', { cost: u.level })}</button>`}
     </div>`;
   }).join('');
 
   $('detail-content').innerHTML = `
-    <div class="eyebrow">${h('nav.grimoire')} · LVL ${base.level}</div>
+    <div class="eyebrow">${h('nav.grimoire')} · ${h('compendium.levelEyebrow', { level: base.level })}</div>
     <div class="catalog-card-title-group" style="margin:8px 0 12px">
       <span class="card-emblem">${spellIconSvg(base, 32)}</span>
-      <h2 style="margin:0">${escapeHtml(base.name)}</h2>
+      <h2 style="margin:0">${escapeHtml(grimoireSpellName(base))}</h2>
     </div>
     <div class="chip-wrap">${tagPills}</div>
-    <p class="catalog-desc" style="margin-top:10px">${escapeHtml(cleanCatalogDesc(base.desc))}</p>
+    <p class="catalog-desc" style="margin-top:10px">${escapeHtml(grimoireSpellDesc(base))}</p>
     <div class="detail-stats">
-      <div>DMG<strong>${eff.damage} (${eff.damageTypes.join('/')})</strong></div>
-      <div>RNG / AREA<strong>${eff.range} / ${eff.radius}</strong></div>
-      <div>CHARGES / HP<strong>${eff.maxCharges || '∞'} / ${eff.hpCost ? `-${eff.hpCost} HP` : '0'}</strong></div>
-      <div>POINTS<strong>${game.points} SP</strong></div>
+      <div>${h('stats.dmg')}<strong>${eff.damage} (${escapeHtml(eff.damageTypes.map(damageTypeName).join('/'))})</strong></div>
+      <div>${h('stats.rngArea')}<strong>${eff.range} / ${eff.radius}</strong></div>
+      <div>${h('stats.chargesHp')}<strong>${eff.maxCharges || '∞'} / ${eff.hpCost ? `-${eff.hpCost} ${h('stats.hp')}` : '0'}</strong></div>
+      <div>${h('stats.points')}<strong>${h('compendium.spCost', { cost: game.points })}</strong></div>
     </div>
     ${base.granted_by && !isLearned ? h('book.requires', { item: equipmentName(base.granted_by) }) : isLearned ? '' : `<button class="primary" id="dialog-learn-spell" ${canLearnSpell(game, spellId) ? '' : 'disabled'}>${h('compendium.learnSpell', { cost: base.level })}</button>`}
     <h3 style="margin:18px 0 6px">${h('compendium.upgrades')}</h3>
@@ -459,7 +472,7 @@ export function renderForgeView(state) {
   $('satchel-chips').innerHTML = game.components.length
     ? game.components.map(name => {
       const comp = componentByName.get(name);
-      return `<span class="tag-pill" title="${escapeHtml(cleanCatalogDesc(comp?.desc || ''))}">${componentIconSvg(comp, 16)}<span>${escapeHtml(componentName(name))}</span> <small style="opacity:.7">(${(comp?.tags || []).join('/')})</small></span>`;
+      return `<span class="tag-pill" title="${escapeHtml(componentDesc(comp))}">${componentIconSvg(comp, 16)}<span>${escapeHtml(componentName(name))}</span> <small style="opacity:.7">(${escapeHtml((comp?.tags || []).map(tagName).join('/'))})</small></span>`;
     }).join('')
     : `<span class="muted">${h('forge.empty')}</span>`;
 
@@ -486,15 +499,19 @@ export function renderForgeView(state) {
     if (game.allowedEquipment && !game.allowedEquipment.includes(item.name)) return false;
     if (slot !== 'all' && item.slot !== slot) return false;
     if (status === 'craftable' && !craftableNames.has(item.name)) return false;
-    if (q && !searchCatalogue(q, [item.name, equipmentName(item.name), item.slot, t(`slots.${item.slot.toLowerCase()}`), { Feet: 'footwear', Head: 'headwear' }[item.slot], ...item.tags, item.desc, ...item.bonuses], item.summons)) return false;
+    if (q && !searchCatalogue(q, [
+      item.name, equipmentName(item.name), item.slot, t(`slots.${item.slot.toLowerCase()}`),
+      { Feet: 'footwear', Head: 'headwear' }[item.slot], ...item.tags, ...item.tags.map(tagName),
+      item.desc, equipmentDesc(item), ...item.bonuses, ...item.bonuses.map(equipmentBonusText),
+    ], item.summons)) return false;
     return true;
   }).sort((a, b) => (craftableNames.has(b.name) ? 1 : 0) - (craftableNames.has(a.name) ? 1 : 0));
 
   $('eq-grid').innerHTML = filtered.map(item => {
     const canMake = craftableNames.has(item.name);
     const isEquipped = equippedNames.has(item.name);
-    const recipeText = item.recipe.map(([tg, c]) => `${c}× ${tg}`).join(' + ');
-    const bonuses = [...(item.bonuses || []), item.desc].filter(Boolean).map(cleanCatalogDesc).join('\n');
+    const recipeText = item.recipe.map(([tg, c]) => `${c}× ${tagName(tg)}`).join(' + ');
+    const bonuses = [...(item.bonuses || []).map(equipmentBonusText), equipmentDesc(item)].filter(Boolean).join('\n');
     return `<div class="catalog-card ${canMake ? 'craftable-card' : ''} ${isEquipped ? 'learned-card' : ''}">
       <div class="catalog-card-head">
         <div class="catalog-card-title-group">
@@ -503,7 +520,7 @@ export function renderForgeView(state) {
         </div>
         <span class="catalog-badge">${h(`slots.${item.slot.toLowerCase()}`)}</span>
       </div>
-      <div class="chip-wrap">${item.tags.map(tg => `<span class="tag-pill" style="color:${(TAG_META[tg] || TAG_META.Arcane).color}">${tagIconSvg(tg, 12)}<span>${escapeHtml(tg)}</span></span>`).join('')}</div>
+      <div class="chip-wrap">${item.tags.map(tg => `<span class="tag-pill" style="color:${(TAG_META[tg] || TAG_META.Arcane).color}">${tagIconSvg(tg, 12)}<span>${escapeHtml(tagName(tg))}</span></span>`).join('')}</div>
       <div class="catalog-stats-line"><span>${escapeHtml(recipeText)}</span></div>
       <p class="catalog-desc">${escapeHtml(bonuses)}</p>
       <div class="catalog-card-actions">
@@ -516,7 +533,7 @@ export function renderForgeView(state) {
 export function showUnit(state) {
   const unit = units.get($('unit-select').value);
   $('unit-detail').innerHTML = unit
-    ? `<div class="inspect-head"><div class="inspect-symbol">${unitIconSvg(unit, 38)}</div><div><h3>${escapeHtml(unit.name)}</h3><p style="margin:2px 0 0">${unit.hp} HP · ${unit.shields} SH · ${escapeHtml(unit.tags.join(' / '))}</p></div></div>${renderResistances(state.game, { resistances: unit.resists })}<dl>${unit.abilities.map(a => `<dt>${escapeHtml(a.name)}</dt><dd>${escapeHtml([a.damage ? a.damage + ' ' + a.damage_type.join('/') : '', a.range ? 'R' + a.range : '', cleanCatalogDesc(a.desc)].filter(Boolean).join(' · '))}</dd>`).join('')}</dl>${unit.passives.map(p => `<p>${escapeHtml(cleanCatalogDesc(p))}</p>`).join('')}`
+    ? `<div class="inspect-head"><div class="inspect-symbol">${unitIconSvg(unit, 38)}</div><div><h3>${escapeHtml(unitName(unit.name))}</h3><p style="margin:2px 0 0">${unit.hp} ${h('stats.hp')} · ${unit.shields} ${h('stats.sh')} · ${escapeHtml(unit.tags.map(tagName).join(' / '))}</p></div></div>${renderResistances(state.game, { resistances: unit.resists })}<dl>${unit.abilities.map(a => `<dt>${escapeHtml(abilityName(a.name))}</dt><dd>${escapeHtml([a.damage ? `${a.damage} ${a.damage_type.map(damageTypeName).join('/')}` : '', a.range ? t('stats.rangeShort', { n: a.range }) : '', abilityDesc(a.desc)].filter(Boolean).join(' · '))}</dd>`).join('')}</dl>${unit.passives.map(p => `<p>${escapeHtml(passiveText(p))}</p>`).join('')}`
     : h('bestiary.empty');
 }
 
@@ -528,9 +545,12 @@ export function renderBestiary(state) {
   const query = $('unit-search').value;
   const matches = [...units.values()].filter(u =>
     (!defeatedSet || defeatedSet.has(u.name))
-    && searchCatalogue(query, [u.name, ...u.tags, u.is_boss ? 'boss' : '', ...u.abilities.map(a => a.name)])
+    && searchCatalogue(query, [
+      u.name, unitName(u.name), ...u.tags, ...u.tags.map(tagName),
+      u.is_boss ? 'boss' : '', ...u.abilities.flatMap(a => [a.name, abilityName(a.name)]),
+    ])
   );
-  list.replaceChildren(...matches.map(u => new Option(u.name, u.name)));
+  list.replaceChildren(...matches.map(u => new Option(unitName(u.name), u.name)));
   if (matches.some(u => u.name === previous)) list.value = previous;
   else list.selectedIndex = 0;
   showUnit(state);
@@ -538,10 +558,11 @@ export function renderBestiary(state) {
 
 export function showWardrobe(state) {
   const unlocked = new Set(state.profile.outfits);
-  $('wardrobe-select').replaceChildren(...wardrobe.map(({ name, unlock }) => {
-    const opt = new Option(unlocked.has(name) ? name : '🔒 ' + name, name);
-    opt.title = unlock;
-    opt.disabled = !unlocked.has(name);
+  $('wardrobe-select').replaceChildren(...wardrobe.map(outfit => {
+    const locName = outfitName(outfit.name);
+    const opt = new Option(unlocked.has(outfit.name) ? locName : '🔒 ' + locName, outfit.name);
+    opt.title = outfitUnlock(outfit);
+    opt.disabled = !unlocked.has(outfit.name);
     return opt;
   }));
   $('wardrobe-select').value = state.profile.selected;

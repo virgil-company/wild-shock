@@ -366,14 +366,14 @@ export function outfitAssetSvg(name = 'Wizard', size = 32) {
   return wrapAssetSvg(inner, size, 'ws-icon', name);
 }
 
-export function wizardPortraitAssetSvg(outfitName = 'Wizard') {
+export function wizardPortraitAssetSvg(outfitName = 'Wizard', ariaLabel = outfitName) {
   const colors = outfitColor(outfitName);
   const pal = resolvePalette(outfitName, [], 'Arcane');
   const robe = colors?.robe || '#254235';
   const hat = colors?.hat || '#335746';
   const eyeCol = outfitName === 'Wizard' ? '#7bd0ff' : pal.accent;
   const uid = `wp${hashString(outfitName).toString(36)}`;
-  return `<svg class="wizard-portrait-svg" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${String(outfitName).replace(/"/g, '&quot;')}">
+  return `<svg class="wizard-portrait-svg" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${String(ariaLabel).replace(/"/g, '&quot;')}">
     <defs>
       <radialGradient id="${uid}-bg" cx="50%" cy="42%" r="58%">
         <stop offset="0%" stop-color="${pal.dark}"/>

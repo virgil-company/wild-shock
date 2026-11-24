@@ -2,11 +2,19 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { t, setLocale, getLocale, locales, localeOptions } from '../src/i18n/i18n.js';
-import { components, equipment, nodes, paths, schools } from '../src/data/catalog.js';
+import { components, equipment, nodes, paths, schools, spells, tags, units, wardrobe } from '../src/data/catalog.js';
 import { artifacts } from '../src/data/artifacts.js';
-import { namedKey } from '../src/i18n/text-keys.js';
-import { nodeName, nodeDescription, logText } from '../src/i18n/game-text.js';
-import { createGame, wait, serialize, restore } from '../src/engine/index.js';
+import { CLOUD_TYPES, DAMAGE_TYPES, DEBUFF_STATUSES, STATUS_LIST, TICK_DECAY_STATUSES } from '../src/data/constants.js';
+import { mutators, vaults } from '../src/data/campaign.js';
+import { descKey, hashedTextKey, namedKey, slugKey, spellDescKey, spellNameKey, upgradeDescKey, upgradeNameKey } from '../src/i18n/text-keys.js';
+import {
+  abilityDesc, abilityName, componentDesc, damageTypeName, damageTypeShort,
+  equipmentBonusText, equipmentDesc, equipmentName, grimoireSpellDesc,
+  grimoireSpellName, logText, mutatorName, nodeDescription, nodeName,
+  outfitName, outfitUnlock, passiveText, statusName, tagName, unitName,
+  upgradeDesc, upgradeName, vaultName,
+} from '../src/i18n/game-text.js';
+import { createGame, learnSpell, learnUpgrade, wait, serialize, restore } from '../src/engine/index.js';
 
 const placeholders = value => [...value.matchAll(/\{(\w+)\}/g)].map(match => match[1]).sort();
 
@@ -25,9 +33,42 @@ test('every locale has the same keys and interpolation parameters', () => {
 
 test('markup and game catalogs reference keys available in every locale', () => {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-  const keys = [...html.matchAll(/data-i18n(?:-[\w-]+)?="([^"]+)"/g)].map(match => match[1]);
-  for (const item of components) keys.push(namedKey('components', item.name));
-  for (const item of equipment) keys.push(namedKey('equipment', item.name));
+  const wikiHtml = readFileSync(new URL('../wiki.html', import.meta.url), 'utf8');
+  const keys = [
+    ...[...html.matchAll(/data-i18n(?:-[\w-]+)?="([^"]+)"/g)].map(match => match[1]),
+    ...[...wikiHtml.matchAll(/data-i18n(?:-[\w-]+)?="([^"]+)"/g)].map(match => match[1]),
+  ];
+  for (const item of components) {
+    keys.push(namedKey('components', item.name));
+    if (item.desc) keys.push(descKey('components', item.name));
+  }
+  for (const item of equipment) {
+    keys.push(namedKey('equipment', item.name));
+    if (item.desc) keys.push(descKey('equipment', item.name));
+    for (const bonus of item.bonuses || []) keys.push(hashedTextKey('equipmentBonuses', bonus));
+  }
+  for (const spell of spells) {
+    keys.push(spellNameKey(spell.id), spellDescKey(spell.id));
+    for (const upgrade of spell.upgrades || []) keys.push(upgradeNameKey(upgrade.sp_id), upgradeDescKey(upgrade.sp_id));
+  }
+  for (const unit of units) {
+    keys.push(namedKey('units', unit.name));
+    for (const ability of unit.abilities || []) {
+      keys.push(namedKey('abilities', ability.name));
+      if (ability.desc) keys.push(hashedTextKey('abilityDescs', ability.desc));
+    }
+    for (const passive of unit.passives || []) keys.push(hashedTextKey('passives', passive));
+  }
+  for (const outfit of wardrobe) {
+    keys.push(namedKey('wardrobe', outfit.name));
+    if (outfit.unlock) keys.push(`wardrobe.${slugKey(outfit.name)}.unlock`);
+  }
+  for (const tag of [...new Set([...tags, ...units.flatMap(u => u.tags || []), 'Any'])]) keys.push(`tags.${slugKey(tag)}`);
+  for (const dt of DAMAGE_TYPES) keys.push(`damageTypes.${slugKey(dt)}`, `damageTypes.${slugKey(dt)}.short`);
+  for (const status of new Set([...STATUS_LIST, ...DEBUFF_STATUSES, ...TICK_DECAY_STATUSES, 'quickstep', 'ironize'])) keys.push(`statuses.${status}`);
+  for (const cloudId of Object.keys(CLOUD_TYPES)) keys.push(`clouds.${cloudId}.name`);
+  for (const vault of Object.keys(vaults)) keys.push(`vaults.${slugKey(vault)}`);
+  for (const mutator of mutators) keys.push(`mutators.${mutator}`, `mutators.${mutator}.name`);
   for (const item of artifacts) keys.push(`artifacts.${item.id}.name`, `artifacts.${item.id}.description`);
   for (const school of schools) {
     keys.push(`schools.${school.id}.name`, `schools.${school.id}.initiate`, `schools.${school.id}.archmage`);
@@ -39,6 +80,50 @@ test('markup and game catalogs reference keys available in every locale', () => 
   // Adding an English phrase to a component must not silently recreate source-text lookup.
   setLocale('pt-BR');
   assert.equal(t('Saved locally'), 'Saved locally');
+});
+
+test('catalog helpers return localized labels in PT-BR and ES', () => {
+  const fireball = spells.find(s => s.name === 'Fireball');
+  const acidifier = equipment.find(e => e.name === 'Acidifier');
+  const mote = components.find(c => c.name === 'Arcane Mote');
+  const goblin = units.find(u => u.name === 'Goblin');
+  const describedAbility = units.flatMap(u => u.abilities || []).find(a => a.desc);
+  const pyromancer = wardrobe.find(w => w.name === 'Pyromancer');
+
+  for (const lang of ['pt-BR', 'es']) {
+    setLocale(lang);
+    assert.notEqual(grimoireSpellName(fireball), fireball.name, `${lang}: spell name`);
+    assert.notEqual(grimoireSpellDesc(fireball), fireball.desc, `${lang}: spell desc`);
+    assert.notEqual(upgradeName(fireball.upgrades[0]), fireball.upgrades[0].name, `${lang}: upgrade name`);
+    assert.notEqual(upgradeDesc(fireball.upgrades[0]), fireball.upgrades[0].desc, `${lang}: upgrade desc`);
+    assert.notEqual(equipmentName(acidifier.name), acidifier.name, `${lang}: equipment name`);
+    assert.notEqual(equipmentDesc(acidifier), acidifier.desc, `${lang}: equipment desc`);
+    assert.notEqual(componentDesc(mote), mote.desc, `${lang}: component desc`);
+    assert.ok(unitName(goblin.name));
+    assert.ok(abilityName(describedAbility.name));
+    assert.notEqual(abilityDesc(describedAbility.desc), describedAbility.desc, `${lang}: ability desc`);
+    assert.ok(passiveText(units.find(u => u.passives.length).passives[0]));
+    assert.ok(equipmentBonusText(equipment.find(e => e.bonuses.length).bonuses[0]));
+    assert.notEqual(tagName('Fire'), 'Fire', `${lang}: tag`);
+    assert.notEqual(damageTypeName('Lightning'), 'Lightning', `${lang}: damageType`);
+    assert.notEqual(damageTypeShort('Lightning'), 'Lig', `${lang}: damageTypeShort`);
+    assert.notEqual(statusName('freeze'), 'freeze', `${lang}: status`);
+    assert.notEqual(vaultName('Flame'), 'Flame', `${lang}: vault`);
+    assert.notEqual(mutatorName('weather'), 'weather', `${lang}: mutator`);
+    assert.notEqual(outfitName(pyromancer.name), pyromancer.name, `${lang}: outfit`);
+    assert.notEqual(outfitUnlock(pyromancer), pyromancer.unlock, `${lang}: outfit unlock`);
+  }
+
+  const game = createGame(42);
+  assert.ok(learnSpell(game, 67));
+  assert.ok(learnUpgrade(game, 67, 338));
+  const saved = serialize(game);
+  setLocale('pt-BR');
+  assert.match(logText(game.log[0]), /aprimorada com/);
+  setLocale('es');
+  assert.match(logText(game.log[0]), /mejorado con|Hechizo/);
+  assert.equal(serialize(game), saved);
+  setLocale('en');
 });
 
 test('key lookup interpolates once and supports language-neutral references', () => {

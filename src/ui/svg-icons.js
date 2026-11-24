@@ -81,8 +81,8 @@ function buildTagInner(tag) {
   }
 }
 
-export function wizardPortraitSvg(outfitName = 'Wizard') {
-  return memo(`portrait:${outfitName}`, () => wizardPortraitAssetSvg(outfitName));
+export function wizardPortraitSvg(outfitName = 'Wizard', ariaLabel = outfitName) {
+  return memo(`portrait:${outfitName}:${ariaLabel}`, () => wizardPortraitAssetSvg(outfitName, ariaLabel));
 }
 
 export function tagIconSvg(tag, size = 22) {

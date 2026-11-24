@@ -4,7 +4,13 @@ import { mutators, outfitColor, vaults } from '../data/campaign.js';
 import { CLOUD_TYPES, DAMAGE_TYPES, SHRINE_TYPES, equipmentSlots } from '../data/constants.js';
 import { getUnitMeta, searchCatalogue, units } from '../data/bestiary.js';
 import { craftableEquipment, equipmentByName, knownSpellIds, spellByName } from '../rules/core.js';
-import { componentName, equipmentName } from '../i18n/game-text.js';
+import {
+  abilityDesc, abilityName, cloudName, componentDesc, componentName,
+  damageTypeName, damageTypeShort, equipmentBonusText, equipmentDesc,
+  equipmentName, grimoireSpellDesc, grimoireSpellName, mutatorName,
+  outfitName, outfitUnlock, passiveText, poolName, statusName, tagName,
+  unitName, upgradeDesc, upgradeName, vaultName,
+} from '../i18n/game-text.js';
 import { t } from '../i18n/i18n.js';
 import {
   TAG_COLORS, artifactIconSvg, cloudIconSvg, componentIconSvg, entityIconSvg,
@@ -116,17 +122,26 @@ function unitMatchesCommon(unit, filters, defeatedSet) {
     if (filters.trait === 'defeated' && (!defeatedSet || !defeatedSet.has(unit.name))) return false;
   }
   if (filters.query) {
-    const resTerms = Object.entries(unit.resists || {}).flatMap(([dt, v]) => v < 0 ? [dt, 'weak'] : v >= 100 ? [dt, 'immune'] : v > 0 ? [dt, 'resist'] : []);
+    const resTerms = Object.entries(unit.resists || {}).flatMap(([dt, v]) => {
+      const locDt = damageTypeName(dt);
+      return v < 0 ? [dt, locDt, 'weak', t('wiki.label.weaknesses')]
+        : v >= 100 ? [dt, locDt, 'immune', t('wiki.label.immunities')]
+        : v > 0 ? [dt, locDt, 'resist', t('wiki.label.resistances')]
+        : [];
+    });
     const fields = [
-      unit.name,
-      ...(unit.tags || []),
+      unit.name, unitName(unit.name),
+      ...(unit.tags || []), ...(unit.tags || []).map(tagName),
       ...resTerms,
       unit.is_boss ? 'boss' : '',
       unit.boss_kind || '',
       unit.rare?.class ? `elite ${unit.rare.class}` : '',
-      unit.escorted_by || '',
-      ...(unit.abilities || []).flatMap(a => [a.name, a.desc, ...(a.damage_type || [])]),
-      ...(unit.passives || []),
+      unit.escorted_by || '', unit.escorted_by ? unitName(unit.escorted_by) : '',
+      ...(unit.abilities || []).flatMap(a => [
+        a.name, abilityName(a.name), a.desc, abilityDesc(a.desc),
+        ...(a.damage_type || []), ...(a.damage_type || []).map(damageTypeName),
+      ]),
+      ...(unit.passives || []), ...(unit.passives || []).map(passiveText),
     ];
     if (!searchCatalogue(filters.query, fields)) return false;
   }
@@ -148,10 +163,11 @@ export function filterWikiEntries(category, filters = {}, context = {}) {
       return unitMatchesCommon(u, f, defeatedSet);
     });
     return list.sort((a, b) => {
-      if (f.sort === 'hpDesc') return (b.hp - a.hp) || a.name.localeCompare(b.name);
-      if (f.sort === 'hpAsc') return (a.hp - b.hp) || a.name.localeCompare(b.name);
-      if (f.sort === 'difficulty') return ((b.difficulty || 0) - (a.difficulty || 0)) || (b.hp - a.hp) || a.name.localeCompare(b.name);
-      return a.name.localeCompare(b.name);
+      const nameA = unitName(a.name), nameB = unitName(b.name);
+      if (f.sort === 'hpDesc') return (b.hp - a.hp) || nameA.localeCompare(nameB);
+      if (f.sort === 'hpAsc') return (a.hp - b.hp) || nameA.localeCompare(nameB);
+      if (f.sort === 'difficulty') return ((b.difficulty || 0) - (a.difficulty || 0)) || (b.hp - a.hp) || nameA.localeCompare(nameB);
+      return nameA.localeCompare(nameB);
     });
   }
 
@@ -161,17 +177,19 @@ export function filterWikiEntries(category, filters = {}, context = {}) {
       return unitMatchesCommon(u, f, defeatedSet);
     });
     return list.sort((a, b) => {
-      if (f.sort === 'hpDesc') return (b.hp - a.hp) || a.name.localeCompare(b.name);
+      const nameA = unitName(a.name), nameB = unitName(b.name);
+      if (f.sort === 'hpDesc') return (b.hp - a.hp) || nameA.localeCompare(nameB);
       if (f.sort === 'shieldsDesc') return ((b.shields || 0) - (a.shields || 0)) || (b.hp - a.hp);
-      return a.name.localeCompare(b.name);
+      return nameA.localeCompare(nameB);
     });
   }
 
   if (category === 'companions') {
     const list = DATASETS.companions.filter(u => unitMatchesCommon(u, f, defeatedSet));
     return list.sort((a, b) => {
-      if (f.sort === 'hpDesc') return (b.hp - a.hp) || a.name.localeCompare(b.name);
-      return a.name.localeCompare(b.name);
+      const nameA = unitName(a.name), nameB = unitName(b.name);
+      if (f.sort === 'hpDesc') return (b.hp - a.hp) || nameA.localeCompare(nameB);
+      return nameA.localeCompare(nameB);
     });
   }
 
@@ -193,18 +211,21 @@ export function filterWikiEntries(category, filters = {}, context = {}) {
       }
       if (f.query) {
         const fields = [
-          s.name, ...s.tags, ...(s.damage_type || []), s.desc, s.granted_by || '',
-          ...(s.upgrades || []).flatMap(u => [u.name, u.desc]),
+          s.name, grimoireSpellName(s), ...s.tags, ...s.tags.map(tagName),
+          ...(s.damage_type || []), ...(s.damage_type || []).map(damageTypeName),
+          s.desc, grimoireSpellDesc(s), s.granted_by || '', s.granted_by ? equipmentName(s.granted_by) : '',
+          ...(s.upgrades || []).flatMap(u => [u.name, upgradeName(u), u.desc, upgradeDesc(u)]),
         ];
         if (!searchCatalogue(f.query, fields, s.summons || [])) return false;
       }
       return true;
     });
     return list.sort((a, b) => {
-      if (f.sort === 'levelAsc') return (a.level - b.level) || a.name.localeCompare(b.name);
-      if (f.sort === 'levelDesc') return (b.level - a.level) || a.name.localeCompare(b.name);
-      if (f.sort === 'damageDesc') return ((b.stats?.damage || 0) - (a.stats?.damage || 0)) || a.name.localeCompare(b.name);
-      return a.name.localeCompare(b.name);
+      const nameA = grimoireSpellName(a), nameB = grimoireSpellName(b);
+      if (f.sort === 'levelAsc') return (a.level - b.level) || nameA.localeCompare(nameB);
+      if (f.sort === 'levelDesc') return (b.level - a.level) || nameA.localeCompare(nameB);
+      if (f.sort === 'damageDesc') return ((b.stats?.damage || 0) - (a.stats?.damage || 0)) || nameA.localeCompare(nameB);
+      return nameA.localeCompare(nameB);
     });
   }
 
@@ -223,10 +244,11 @@ export function filterWikiEntries(category, filters = {}, context = {}) {
         if (f.special === 'craftable' && !craftableSet.has(item.name)) return false;
       }
       if (f.query) {
-        const granted = SPELLS_BY_BOOK.get(item.name)?.map(sp => sp.name) || [];
+        const granted = SPELLS_BY_BOOK.get(item.name)?.flatMap(sp => [sp.name, grimoireSpellName(sp)]) || [];
         const fields = [
           item.name, equipmentName(item.name), item.slot, t(`slots.${item.slot.toLowerCase()}`),
-          ...item.tags, item.desc, ...(item.bonuses || []), ...(item.effects || []), ...granted,
+          ...item.tags, ...item.tags.map(tagName), item.desc, equipmentDesc(item),
+          ...(item.bonuses || []), ...(item.bonuses || []).map(equipmentBonusText), ...(item.effects || []), ...granted,
         ];
         if (!searchCatalogue(f.query, fields, item.summons || [])) return false;
       }
@@ -252,7 +274,11 @@ export function filterWikiEntries(category, filters = {}, context = {}) {
         if (f.trigger === 'pickup' && !c.on_pickup) return false;
         if (f.trigger === 'craft' && !c.on_craft) return false;
         if (f.query) {
-          const fields = [c.name, componentName(c.name), ...c.tags, c.desc, ...(c.effects || []), c.rare ? 'rare' : 'common'];
+          const fields = [
+            c.name, componentName(c.name), ...c.tags, ...c.tags.map(tagName),
+            c.desc, componentDesc(c), ...(c.effects || []),
+            c.rare ? 'rare' : 'common', t(c.rare ? 'wiki.label.rare' : 'wiki.label.common'),
+          ];
           if (!searchCatalogue(f.query, fields, c.summons || [])) return false;
         }
         return true;
@@ -291,15 +317,22 @@ export function filterWikiEntries(category, filters = {}, context = {}) {
       }
       if (entry.kind === 'cloud') {
         const c = entry.data;
-        return searchCatalogue(f.query, [c.id, c.name, c.damageType || '', c.status || '']);
+        return searchCatalogue(f.query, [
+          c.id, c.name, cloudName(c.id, c.name),
+          c.damageType || '', c.damageType ? damageTypeName(c.damageType) : '',
+          c.status || '', c.status ? statusName(c.status) : '',
+        ]);
       }
       if (entry.kind === 'vault') {
-        return searchCatalogue(f.query, [entry.data.name, t('vault.name', { name: entry.data.name }), ...entry.data.guardians]);
+        return searchCatalogue(f.query, [
+          entry.data.name, vaultName(entry.data.name), t('vault.name', { name: vaultName(entry.data.name) }),
+          ...entry.data.guardians, ...entry.data.guardians.map(unitName),
+        ]);
       }
       if (entry.kind === 'mutator') {
-        return searchCatalogue(f.query, [entry.data, t(`mutators.${entry.data}`)]);
+        return searchCatalogue(f.query, [entry.data, mutatorName(entry.data), t(`mutators.${entry.data}`)]);
       }
-      return searchCatalogue(f.query, [entry.data.name, entry.data.unlock || '']);
+      return searchCatalogue(f.query, [entry.data.name, outfitName(entry.data.name), entry.data.unlock || '', outfitUnlock(entry.data)]);
     });
     return list;
   }
@@ -309,7 +342,7 @@ export function filterWikiEntries(category, filters = {}, context = {}) {
 
 function tagPillHtml(tag) {
   const color = TAG_COLORS[tag] || '#e5c27b';
-  return `<span class="tag-pill" style="color:${color}">${tagIconSvg(tag, 12)}<span>${escapeHtml(tag)}</span></span>`;
+  return `<span class="tag-pill" style="color:${color}">${tagIconSvg(tag, 12)}<span>${escapeHtml(tagName(tag))}</span></span>`;
 }
 
 function renderAffinityBadges(resists, { compact = false } = {}) {
@@ -317,7 +350,7 @@ function renderAffinityBadges(resists, { compact = false } = {}) {
   if (!immunities.length && !resistances.length && !weaknesses.length) {
     return compact ? '' : `<p class="muted wiki-neutral-note">${h('wiki.label.noAffinities')}</p>`;
   }
-  const badge = (dt, val, cls) => `<span class="res-badge ${cls}">${tagIconSvg(dt, 11)}<span>${escapeHtml(compact ? dt.slice(0, 3) : dt)} ${val > 0 ? '+' : ''}${val}%</span></span>`;
+  const badge = (dt, val, cls) => `<span class="res-badge ${cls}">${tagIconSvg(dt, 11)}<span>${escapeHtml(compact ? damageTypeShort(dt) : damageTypeName(dt))} ${val > 0 ? '+' : ''}${val}%</span></span>`;
 
   if (compact) {
     const groups = [];
@@ -373,21 +406,21 @@ function renderUnitCard(unit, category, defeatedSet) {
   const primaryColor = TAG_COLORS[unit.tags?.[0]] || (unit.is_boss ? '#f87171' : '#e5c27b');
   const defeated = defeatedSet.has(unit.name);
   const roleCls = unit.is_boss ? 'wiki-badge-boss' : unit.rare ? 'wiki-badge-elite' : unit.is_companion ? 'wiki-badge-ally' : '';
-  const stats = [`HP ${unit.hp}`];
-  if (unit.shields) stats.push(`SH ${unit.shields}`);
-  if (meta.damage) stats.push(`DMG ${meta.damage}`);
-  if (meta.range) stats.push(`RNG ${meta.range}`);
-  if (unit.difficulty) stats.push(`D${unit.difficulty}`);
+  const stats = [`${t('stats.hp')} ${unit.hp}`];
+  if (unit.shields) stats.push(`${t('stats.sh')} ${unit.shields}`);
+  if (meta.damage) stats.push(`${t('stats.dmg')} ${meta.damage}`);
+  if (meta.range) stats.push(`${t('stats.rng')} ${meta.range}`);
+  if (unit.difficulty) stats.push(t('stats.difficultyShort', { n: unit.difficulty }));
   const traits = unitTraits(unit);
-  const previewAbilities = (unit.abilities || []).slice(0, 2).map(a => a.name).join(' · ');
-  const previewPassive = unit.passives?.[0] ? cleanCatalogDesc(unit.passives[0]) : '';
+  const previewAbilities = (unit.abilities || []).slice(0, 2).map(a => abilityName(a.name)).join(' · ');
+  const previewPassive = unit.passives?.[0] ? passiveText(unit.passives[0]) : '';
 
   return `<article class="catalog-card wiki-card ${unit.is_boss ? 'wiki-card-boss' : ''} ${defeated ? 'wiki-card-discovered' : ''}" data-wiki-open="${escapeHtml(category)}:${escapeHtml(unit.name)}" tabindex="0" role="button">
     <div class="catalog-card-head">
       <div class="catalog-card-title-group">
         <span class="card-emblem wiki-emblem" style="border-color:${primaryColor}66">${unitIconSvg(unit, 36)}</span>
         <div class="wiki-title-stack">
-          <h3>${escapeHtml(unit.name)}</h3>
+          <h3>${escapeHtml(unitName(unit.name))}</h3>
           ${traits.length ? `<small class="wiki-submeta">${escapeHtml(traits.join(' · '))}</small>` : ''}
         </div>
       </div>
@@ -409,31 +442,31 @@ function renderSpellCard(spell, learnedSet) {
   const primaryTag = spell.tags?.[0] || 'Arcane';
   const primaryColor = TAG_COLORS[primaryTag] || '#c084fc';
   const stats = [];
-  if (spell.stats?.damage) stats.push(`DMG ${spell.stats.damage}${spell.damage_type?.length ? ` (${spell.damage_type.join('/')})` : ''}`);
+  if (spell.stats?.damage) stats.push(`${t('stats.dmg')} ${spell.stats.damage}${spell.damage_type?.length ? ` (${spell.damage_type.map(damageTypeName).join('/')})` : ''}`);
   else stats.push(t('wiki.label.noDamage'));
-  if (spell.stats?.range) stats.push(`RNG ${spell.stats.range}`);
-  if (spell.stats?.radius) stats.push(`AREA ${spell.stats.radius}`);
-  if (spell.stats?.max_charges) stats.push(`CHG ${spell.stats.max_charges}`);
-  if (spell.stats?.hp_cost) stats.push(`HP -${spell.stats.hp_cost}`);
-  if (spell.stats?.minion_health) stats.push(`MINION ${spell.stats.minion_health} HP`);
+  if (spell.stats?.range) stats.push(`${t('stats.rng')} ${spell.stats.range}`);
+  if (spell.stats?.radius) stats.push(`${t('stats.area')} ${spell.stats.radius}`);
+  if (spell.stats?.max_charges) stats.push(`${t('stats.chg')} ${spell.stats.max_charges}`);
+  if (spell.stats?.hp_cost) stats.push(`${t('stats.hp')} -${spell.stats.hp_cost}`);
+  if (spell.stats?.minion_health) stats.push(`${t('stats.minion')} ${spell.stats.minion_health} ${t('stats.hp')}`);
 
   return `<article class="catalog-card wiki-card ${isLearned ? 'learned-card' : ''}" data-wiki-open="spells:${spell.id}" tabindex="0" role="button">
     <div class="catalog-card-head">
       <div class="catalog-card-title-group">
         <span class="card-emblem wiki-emblem" style="border-color:${primaryColor}66">${spellIconSvg(spell, 36)}</span>
         <div class="wiki-title-stack">
-          <h3>${escapeHtml(spell.name)}</h3>
+          <h3>${escapeHtml(grimoireSpellName(spell))}</h3>
           ${spell.granted_by ? `<small class="wiki-submeta">${h('book.requires', { item: equipmentName(spell.granted_by) })}</small>` : ''}
         </div>
       </div>
       <div class="wiki-badge-col">
-        <span class="catalog-badge">LVL ${spell.level} · ${spell.level} SP</span>
+        <span class="catalog-badge">${h('compendium.levelCostBadge', { level: spell.level, cost: spell.level })}</span>
         ${isLearned ? `<span class="wiki-mini-flag">${h('compendium.learnedBadge')}</span>` : ''}
       </div>
     </div>
     <div class="chip-wrap">${spell.tags.map(tagPillHtml).join('')}</div>
     <div class="catalog-stats-line">${stats.map(x => `<span>${escapeHtml(x)}</span>`).join('')}</div>
-    <p class="catalog-desc wiki-clamp">${escapeHtml(cleanCatalogDesc(spell.desc))}</p>
+    <p class="catalog-desc wiki-clamp">${escapeHtml(grimoireSpellDesc(spell))}</p>
     <div class="wiki-card-foot">
       <span>${h('wiki.label.upgrades')}: ${(spell.upgrades || []).length}</span>
       ${spell.quick_cast ? `<span class="wiki-tag-note">⚡ ${h('wiki.label.quickCast')}</span>` : ''}
@@ -447,8 +480,8 @@ function renderEquipmentCard(item, equippedSet, craftableSet) {
   const primaryColor = TAG_COLORS[item.tags?.[0]] || '#e5c27b';
   const isEquipped = equippedSet.has(item.name);
   const canCraft = craftableSet.has(item.name);
-  const recipeText = item.recipe.map(([tg, c]) => `${c}× ${tg}`).join(' + ');
-  const summary = [...(item.bonuses || []), item.desc].filter(Boolean).map(cleanCatalogDesc).join('\n');
+  const recipeText = item.recipe.map(([tg, c]) => `${c}× ${tagName(tg)}`).join(' + ');
+  const summary = [...(item.bonuses || []).map(equipmentBonusText), equipmentDesc(item)].filter(Boolean).join('\n');
   const granted = SPELLS_BY_BOOK.get(item.name);
 
   return `<article class="catalog-card wiki-card ${isEquipped ? 'learned-card' : canCraft ? 'craftable-card' : ''}" data-wiki-open="equipment:${escapeHtml(item.name)}" tabindex="0" role="button">
@@ -457,7 +490,6 @@ function renderEquipmentCard(item, equippedSet, craftableSet) {
         <span class="card-emblem wiki-emblem" style="border-color:${primaryColor}66">${equipmentIconSvg(item, 36)}</span>
         <div class="wiki-title-stack">
           <h3>${escapeHtml(locName)}</h3>
-          ${locName !== item.name ? `<small class="wiki-submeta">${escapeHtml(item.name)}</small>` : ''}
         </div>
       </div>
       <div class="wiki-badge-col">
@@ -467,7 +499,7 @@ function renderEquipmentCard(item, equippedSet, craftableSet) {
     </div>
     <div class="chip-wrap">${item.tags.map(tagPillHtml).join('')}</div>
     <div class="catalog-stats-line"><span>${escapeHtml(recipeText)}</span></div>
-    ${granted ? `<p class="wiki-preview-line"><strong>${h('wiki.label.grantedSpell')}:</strong> ${escapeHtml(granted.map(s => s.name).join(', '))}</p>` : ''}
+    ${granted ? `<p class="wiki-preview-line"><strong>${h('wiki.label.grantedSpell')}:</strong> ${escapeHtml(granted.map(grimoireSpellName).join(', '))}</p>` : ''}
     <p class="catalog-desc wiki-clamp">${escapeHtml(summary)}</p>
   </article>`;
 }
@@ -484,7 +516,6 @@ function renderItemCard(entry) {
           <span class="card-emblem wiki-emblem" style="border-color:${c.rare ? '#ffdf9f' : primaryColor + '66'}">${componentIconSvg(c, 36)}</span>
           <div class="wiki-title-stack">
             <h3>${escapeHtml(locName)}</h3>
-            ${locName !== c.name ? `<small class="wiki-submeta">${escapeHtml(c.name)}</small>` : ''}
           </div>
         </div>
         <div class="wiki-badge-col">
@@ -494,7 +525,7 @@ function renderItemCard(entry) {
       </div>
       <div class="chip-wrap">${c.tags.map(tagPillHtml).join('')}</div>
       <div class="catalog-stats-line"><span>${escapeHtml(triggerLabel)}</span></div>
-      <p class="catalog-desc wiki-clamp">${escapeHtml(cleanCatalogDesc(c.desc))}</p>
+      <p class="catalog-desc wiki-clamp">${escapeHtml(componentDesc(c))}</p>
     </article>`;
   }
 
@@ -545,20 +576,22 @@ function renderWorldCard(entry, unlockedOutfits) {
 
   if (entry.kind === 'cloud') {
     const c = entry.data;
+    const locDmgType = c.damageType ? damageTypeName(c.damageType) : '';
+    const locStatus = c.status ? statusName(c.status) : '';
     const descParts = [];
-    if (c.damage && c.damageType) descParts.push(t('wiki.cloud.desc', { damage: c.damage, type: c.damageType }));
-    if (c.status) descParts.push(t('wiki.cloud.statusOnly', { status: c.status, duration: c.statusDuration || 1 }));
+    if (c.damage && c.damageType) descParts.push(t('wiki.cloud.desc', { damage: c.damage, type: locDmgType }));
+    if (c.status) descParts.push(t('wiki.cloud.statusOnly', { status: locStatus, duration: c.statusDuration || 1 }));
     return `<article class="catalog-card wiki-card" data-wiki-open="world:${escapeHtml(entry.id)}" tabindex="0" role="button">
       <div class="catalog-card-head">
         <div class="catalog-card-title-group">
           <span class="card-emblem wiki-emblem" style="border-color:${c.color}66">${cloudIconSvg(c, 36)}</span>
-          <h3>${escapeHtml(c.name)}</h3>
+          <h3>${escapeHtml(cloudName(c.id, c.name))}</h3>
         </div>
         <span class="catalog-badge">${h('wiki.filter.worldClouds')}</span>
       </div>
       <div class="catalog-stats-line">
-        ${c.damageType ? `<span>${escapeHtml(c.damageType)} · ${c.damage} DMG</span>` : `<span>${h('wiki.label.noDamage')}</span>`}
-        ${c.status ? `<span>${escapeHtml(c.status)} (${c.statusDuration}t)</span>` : ''}
+        ${c.damageType ? `<span>${escapeHtml(locDmgType)} · ${c.damage} ${h('stats.dmg')}</span>` : `<span>${h('wiki.label.noDamage')}</span>`}
+        ${c.status ? `<span>${escapeHtml(locStatus)} (${h('stats.turnsShort', { n: c.statusDuration })})</span>` : ''}
       </div>
       <p class="catalog-desc">${escapeHtml(descParts.join(' '))}</p>
     </article>`;
@@ -570,11 +603,11 @@ function renderWorldCard(entry, unlockedOutfits) {
       <div class="catalog-card-head">
         <div class="catalog-card-title-group">
           <span class="card-emblem wiki-emblem" style="border-color:#e5c27b66">${vaultIconSvg(v.name, 36)}</span>
-          <h3>${h('vault.name', { name: v.name })}</h3>
+          <h3>${h('vault.name', { name: vaultName(v.name) })}</h3>
         </div>
         <span class="catalog-badge">${h('wiki.filter.worldVaults')}</span>
       </div>
-      <p class="wiki-preview-line"><strong>${h('wiki.label.guardians')}:</strong> ${escapeHtml(v.guardians.join(' · '))}</p>
+      <p class="wiki-preview-line"><strong>${h('wiki.label.guardians')}:</strong> ${escapeHtml(v.guardians.map(unitName).join(' · '))}</p>
     </article>`;
   }
 
@@ -584,7 +617,7 @@ function renderWorldCard(entry, unlockedOutfits) {
       <div class="catalog-card-head">
         <div class="catalog-card-title-group">
           <span class="card-emblem wiki-emblem" style="border-color:#f8717166">${mutatorIconSvg(m, 36)}</span>
-          <h3>${escapeHtml(m)}</h3>
+          <h3>${escapeHtml(mutatorName(m))}</h3>
         </div>
         <span class="catalog-badge">${h('wiki.filter.worldMutators')}</span>
       </div>
@@ -600,11 +633,11 @@ function renderWorldCard(entry, unlockedOutfits) {
     <div class="catalog-card-head">
       <div class="catalog-card-title-group">
         <span class="card-emblem wiki-emblem" ${swatch}>${outfitIconSvg(w.name, 36)}</span>
-        <h3>${escapeHtml(w.name)}</h3>
+        <h3>${escapeHtml(outfitName(w.name))}</h3>
       </div>
       <span class="catalog-badge">${h(unlocked ? 'wiki.label.unlockedBadge' : 'wiki.label.lockedBadge')}</span>
     </div>
-    <p class="catalog-desc">${escapeHtml(w.unlock || t('wiki.label.defaultOutfit'))}</p>
+    <p class="catalog-desc">${escapeHtml(outfitUnlock(w))}</p>
   </article>`;
 }
 
@@ -616,24 +649,24 @@ function renderUnitDetail(unit, defeatedSet) {
   const abilitiesHtml = (unit.abilities || []).length
     ? `<div class="wiki-detail-list">${unit.abilities.map(a => {
       const chips = [];
-      if (a.damage) chips.push(`${a.damage} ${(a.damage_type || []).join('/')}`);
+      if (a.damage) chips.push(`${a.damage} ${(a.damage_type || []).map(damageTypeName).join('/')}`);
       if (a.range) chips.push(t('wiki.label.range', { n: a.range }));
       if (a.radius) chips.push(t('wiki.label.radius', { n: a.radius }));
       if (a.cool_down) chips.push(t('wiki.label.cooldown', { n: a.cool_down }));
       if (a.melee) chips.push(t('wiki.label.melee'));
       return `<div class="wiki-detail-item">
-        <div class="wiki-detail-item-head"><strong>${escapeHtml(a.name)}</strong><div class="wiki-inline-chips">${chips.map(c => `<span class="catalog-badge">${escapeHtml(c)}</span>`).join('')}</div></div>
-        ${a.desc ? `<p class="catalog-desc">${escapeHtml(cleanCatalogDesc(a.desc))}</p>` : ''}
+        <div class="wiki-detail-item-head"><strong>${escapeHtml(abilityName(a.name))}</strong><div class="wiki-inline-chips">${chips.map(c => `<span class="catalog-badge">${escapeHtml(c)}</span>`).join('')}</div></div>
+        ${a.desc ? `<p class="catalog-desc">${escapeHtml(abilityDesc(a.desc))}</p>` : ''}
       </div>`;
     }).join('')}</div>`
     : '';
 
   const passivesHtml = (unit.passives || []).length
-    ? `<h3 class="wiki-section-title">${h('wiki.label.passives')}</h3><ul class="wiki-passive-list">${unit.passives.map(p => `<li>${escapeHtml(cleanCatalogDesc(p))}</li>`).join('')}</ul>`
+    ? `<h3 class="wiki-section-title">${h('wiki.label.passives')}</h3><ul class="wiki-passive-list">${unit.passives.map(p => `<li>${escapeHtml(passiveText(p))}</li>`).join('')}</ul>`
     : '';
 
   const escortBtn = unit.escorted_by && units.has(unit.escorted_by)
-    ? `<div class="wiki-crosslinks"><span>${h('wiki.label.escort')}:</span><button class="wiki-link-chip" data-wiki-jump-unit="${escapeHtml(unit.escorted_by)}">${unitIconSvg(units.get(unit.escorted_by), 15)}<span>${escapeHtml(unit.escorted_by)}</span></button></div>`
+    ? `<div class="wiki-crosslinks"><span>${h('wiki.label.escort')}:</span><button class="wiki-link-chip" data-wiki-jump-unit="${escapeHtml(unit.escorted_by)}">${unitIconSvg(units.get(unit.escorted_by), 15)}<span>${escapeHtml(unitName(unit.escorted_by))}</span></button></div>`
     : '';
 
   return `
@@ -641,14 +674,14 @@ function renderUnitDetail(unit, defeatedSet) {
       <span class="wiki-detail-emblem" style="border-color:${primaryColor}88">${unitIconSvg(unit, 56)}</span>
       <div>
         <div class="eyebrow">${escapeHtml(roleLabel(unit))}${defeated ? ` · ${h('wiki.label.defeatedBadge')}` : ''}</div>
-        <h2>${escapeHtml(unit.name)}</h2>
+        <h2>${escapeHtml(unitName(unit.name))}</h2>
         <div class="chip-wrap">${(unit.tags || []).map(tagPillHtml).join('')}</div>
       </div>
     </div>
     <div class="detail-stats wiki-detail-stats-4">
-      <div>HP<strong>${unit.hp}</strong></div>
-      <div>SH<strong>${unit.shields || 0}</strong></div>
-      <div>DMG / RNG<strong>${meta.damage || '—'} / ${meta.range || '—'}</strong></div>
+      <div>${h('stats.hp')}<strong>${unit.hp}</strong></div>
+      <div>${h('stats.sh')}<strong>${unit.shields || 0}</strong></div>
+      <div>${h('stats.dmgRng')}<strong>${meta.damage || '—'} / ${meta.range || '—'}</strong></div>
       <div>${h('wiki.label.difficulty')}<strong>${unit.difficulty || '—'}</strong></div>
     </div>
     ${traits.length ? `<div class="wiki-crosslinks"><span>${h('wiki.label.traits')}:</span>${traits.map(tr => `<span class="tag-pill">${escapeHtml(tr)}</span>`).join('')}</div>` : ''}
@@ -671,7 +704,7 @@ function renderSpellDetail(spell, learnedSet) {
   ].filter(Boolean);
 
   const summonsLinks = (spell.summons || []).filter(n => units.has(n)).map(n =>
-    `<button class="wiki-link-chip" data-wiki-jump-unit="${escapeHtml(n)}">${unitIconSvg(units.get(n), 15)}<span>${escapeHtml(n)}</span></button>`
+    `<button class="wiki-link-chip" data-wiki-jump-unit="${escapeHtml(n)}">${unitIconSvg(units.get(n), 15)}<span>${escapeHtml(unitName(n))}</span></button>`
   ).join('');
 
   const bookLink = spell.granted_by
@@ -681,8 +714,8 @@ function renderSpellDetail(spell, learnedSet) {
   const upgradesHtml = (spell.upgrades || []).length
     ? `<h3 class="wiki-section-title">${h('wiki.label.upgrades')} (${spell.upgrades.length})</h3><div class="wiki-detail-list">${spell.upgrades.map(u => `
       <div class="wiki-detail-item">
-        <div class="wiki-detail-item-head"><strong>${escapeHtml(u.name)}</strong><span class="catalog-badge">${u.level} SP</span></div>
-        <p class="catalog-desc">${escapeHtml(cleanCatalogDesc(u.desc))}</p>
+        <div class="wiki-detail-item-head"><strong>${escapeHtml(upgradeName(u))}</strong><span class="catalog-badge">${h('compendium.spCost', { cost: u.level })}</span></div>
+        <p class="catalog-desc">${escapeHtml(upgradeDesc(u))}</p>
       </div>
     `).join('')}</div>`
     : '';
@@ -691,17 +724,17 @@ function renderSpellDetail(spell, learnedSet) {
     <div class="wiki-detail-hero">
       <span class="wiki-detail-emblem" style="border-color:${primaryColor}88">${spellIconSvg(spell, 56)}</span>
       <div>
-        <div class="eyebrow">${h('wiki.cat.spells')} · LVL ${spell.level}${isLearned ? ` · ${h('compendium.learnedBadge')}` : ''}</div>
-        <h2>${escapeHtml(spell.name)}</h2>
+        <div class="eyebrow">${h('wiki.cat.spells')} · ${h('compendium.levelEyebrow', { level: spell.level })}${isLearned ? ` · ${h('compendium.learnedBadge')}` : ''}</div>
+        <h2>${escapeHtml(grimoireSpellName(spell))}</h2>
         <div class="chip-wrap">${spell.tags.map(tagPillHtml).join('')}</div>
       </div>
     </div>
-    <p class="catalog-desc wiki-detail-desc">${escapeHtml(cleanCatalogDesc(spell.desc))}</p>
+    <p class="catalog-desc wiki-detail-desc">${escapeHtml(grimoireSpellDesc(spell))}</p>
     <div class="detail-stats wiki-detail-stats-4">
-      <div>DMG<strong>${st.damage || '—'}${spell.damage_type?.length ? ` (${spell.damage_type.join('/')})` : ''}</strong></div>
-      <div>RNG / AREA<strong>${st.range ?? '—'} / ${st.radius ?? '—'}</strong></div>
-      <div>CHARGES / HP<strong>${st.max_charges ?? '∞'} / ${st.hp_cost ? `-${st.hp_cost} HP` : '0'}</strong></div>
-      <div>DURATION<strong>${st.duration ?? st.minion_duration ?? '—'}</strong></div>
+      <div>${h('stats.dmg')}<strong>${st.damage || '—'}${spell.damage_type?.length ? ` (${escapeHtml(spell.damage_type.map(damageTypeName).join('/'))})` : ''}</strong></div>
+      <div>${h('stats.rngArea')}<strong>${st.range ?? '—'} / ${st.radius ?? '—'}</strong></div>
+      <div>${h('stats.chargesHp')}<strong>${st.max_charges ?? '∞'} / ${st.hp_cost ? `-${st.hp_cost} ${h('stats.hp')}` : '0'}</strong></div>
+      <div>${h('stats.duration')}<strong>${st.duration ?? st.minion_duration ?? '—'}</strong></div>
     </div>
     <div class="wiki-crosslinks">${flags.map(fl => `<span class="tag-pill">${escapeHtml(fl)}</span>`).join('')}</div>
     ${bookLink}
@@ -713,10 +746,10 @@ function renderSpellDetail(spell, learnedSet) {
 function renderEquipmentDetail(item, equippedSet) {
   const locName = equipmentName(item.name);
   const primaryColor = TAG_COLORS[item.tags?.[0]] || '#e5c27b';
-  const recipePills = item.recipe.map(([tg, c]) => `<span class="tag-pill" style="color:${TAG_COLORS[tg] || '#e5c27b'}">${tg !== 'Any' ? tagIconSvg(tg, 12) : ''}<span>${c}× ${escapeHtml(tg)}</span></span>`).join('');
+  const recipePills = item.recipe.map(([tg, c]) => `<span class="tag-pill" style="color:${TAG_COLORS[tg] || '#e5c27b'}">${tg !== 'Any' ? tagIconSvg(tg, 12) : ''}<span>${c}× ${escapeHtml(tagName(tg))}</span></span>`).join('');
   const granted = SPELLS_BY_BOOK.get(item.name) || [];
   const summonsLinks = (item.summons || []).filter(n => units.has(n)).map(n =>
-    `<button class="wiki-link-chip" data-wiki-jump-unit="${escapeHtml(n)}">${unitIconSvg(units.get(n), 15)}<span>${escapeHtml(n)}</span></button>`
+    `<button class="wiki-link-chip" data-wiki-jump-unit="${escapeHtml(n)}">${unitIconSvg(units.get(n), 15)}<span>${escapeHtml(unitName(n))}</span></button>`
   ).join('');
 
   return `
@@ -725,14 +758,13 @@ function renderEquipmentDetail(item, equippedSet) {
       <div>
         <div class="eyebrow">${h(`slots.${item.slot.toLowerCase()}`)}${equippedSet.has(item.name) ? ` · ${h('compendium.equippedSlot')}` : ''}</div>
         <h2>${escapeHtml(locName)}</h2>
-        ${locName !== item.name ? `<p class="muted" style="margin:0 0 6px">${escapeHtml(item.name)}</p>` : ''}
         <div class="chip-wrap">${item.tags.map(tagPillHtml).join('')}</div>
       </div>
     </div>
     <div class="wiki-crosslinks"><span>${h('wiki.label.recipe')} (${item.recipe_cost}):</span>${recipePills}</div>
-    ${(item.bonuses || []).length ? `<h3 class="wiki-section-title">${h('wiki.label.bonuses')}</h3><ul class="wiki-passive-list">${item.bonuses.map(b => `<li>${escapeHtml(cleanCatalogDesc(b))}</li>`).join('')}</ul>` : ''}
-    ${item.desc ? `<h3 class="wiki-section-title">${h('wiki.label.effects')}</h3><p class="catalog-desc wiki-detail-desc">${escapeHtml(cleanCatalogDesc(item.desc))}</p>` : ''}
-    ${granted.length ? `<div class="wiki-crosslinks"><span>${h('wiki.label.grantedSpell')}:</span>${granted.map(s => `<button class="wiki-link-chip" data-wiki-jump-spell="${s.id}">${spellIconSvg(s, 16)}<span>${escapeHtml(s.name)}</span></button>`).join('')}</div>` : ''}
+    ${(item.bonuses || []).length ? `<h3 class="wiki-section-title">${h('wiki.label.bonuses')}</h3><ul class="wiki-passive-list">${item.bonuses.map(b => `<li>${escapeHtml(equipmentBonusText(b))}</li>`).join('')}</ul>` : ''}
+    ${item.desc ? `<h3 class="wiki-section-title">${h('wiki.label.effects')}</h3><p class="catalog-desc wiki-detail-desc">${escapeHtml(equipmentDesc(item))}</p>` : ''}
+    ${granted.length ? `<div class="wiki-crosslinks"><span>${h('wiki.label.grantedSpell')}:</span>${granted.map(s => `<button class="wiki-link-chip" data-wiki-jump-spell="${s.id}">${spellIconSvg(s, 16)}<span>${escapeHtml(grimoireSpellName(s))}</span></button>`).join('')}</div>` : ''}
     ${summonsLinks ? `<div class="wiki-crosslinks"><span>${h('wiki.label.summons')}:</span>${summonsLinks}</div>` : ''}
   `;
 }
@@ -743,7 +775,7 @@ function renderItemDetail(entry) {
     const locName = componentName(c.name);
     const primaryColor = TAG_COLORS[c.tags?.[0]] || '#c084fc';
     const summonsLinks = (c.summons || []).filter(n => units.has(n)).map(n =>
-      `<button class="wiki-link-chip" data-wiki-jump-unit="${escapeHtml(n)}">${unitIconSvg(units.get(n), 15)}<span>${escapeHtml(n)}</span></button>`
+      `<button class="wiki-link-chip" data-wiki-jump-unit="${escapeHtml(n)}">${unitIconSvg(units.get(n), 15)}<span>${escapeHtml(unitName(n))}</span></button>`
     ).join('');
     return `
       <div class="wiki-detail-hero">
@@ -751,15 +783,14 @@ function renderItemDetail(entry) {
         <div>
           <div class="eyebrow">${h('wiki.filter.itemComponent')} · ${h('wiki.label.tier', { n: c.tier })} · ${h(c.rare ? 'wiki.label.rare' : 'wiki.label.common')}</div>
           <h2>${escapeHtml(locName)}</h2>
-          ${locName !== c.name ? `<p class="muted" style="margin:0 0 6px">${escapeHtml(c.name)}</p>` : ''}
           <div class="chip-wrap">${c.tags.map(tagPillHtml).join('')}</div>
         </div>
       </div>
       <div class="detail-stats">
-        <div>TRIGGER<strong>${h(c.on_pickup ? 'wiki.label.onPickup' : 'wiki.label.onCraft')}</strong></div>
-        <div>POOL<strong>${escapeHtml(c.pool || 'normal')}</strong></div>
+        <div>${h('stats.trigger')}<strong>${h(c.on_pickup ? 'wiki.label.onPickup' : 'wiki.label.onCraft')}</strong></div>
+        <div>${h('stats.pool')}<strong>${escapeHtml(poolName(c.pool))}</strong></div>
       </div>
-      <p class="catalog-desc wiki-detail-desc">${escapeHtml(cleanCatalogDesc(c.desc))}</p>
+      <p class="catalog-desc wiki-detail-desc">${escapeHtml(componentDesc(c))}</p>
       ${summonsLinks ? `<div class="wiki-crosslinks"><span>${h('wiki.label.summons')}:</span>${summonsLinks}</div>` : ''}
     `;
   }
@@ -808,20 +839,22 @@ function renderWorldDetail(entry, unlockedOutfits) {
   }
   if (entry.kind === 'cloud') {
     const c = entry.data;
+    const locDmgType = c.damageType ? damageTypeName(c.damageType) : '';
+    const locStatus = c.status ? statusName(c.status) : '';
     const descParts = [];
-    if (c.damage && c.damageType) descParts.push(t('wiki.cloud.desc', { damage: c.damage, type: c.damageType }));
-    if (c.status) descParts.push(t('wiki.cloud.statusOnly', { status: c.status, duration: c.statusDuration || 1 }));
+    if (c.damage && c.damageType) descParts.push(t('wiki.cloud.desc', { damage: c.damage, type: locDmgType }));
+    if (c.status) descParts.push(t('wiki.cloud.statusOnly', { status: locStatus, duration: c.statusDuration || 1 }));
     return `
       <div class="wiki-detail-hero">
         <span class="wiki-detail-emblem" style="border-color:${c.color}88">${cloudIconSvg(c, 56)}</span>
         <div>
           <div class="eyebrow">${h('wiki.filter.worldClouds')}</div>
-          <h2>${escapeHtml(c.name)}</h2>
+          <h2>${escapeHtml(cloudName(c.id, c.name))}</h2>
         </div>
       </div>
       <div class="detail-stats">
-        <div>DMG<strong>${c.damage ? `${c.damage} ${c.damageType}` : t('wiki.label.noDamage')}</strong></div>
-        <div>STATUS<strong>${c.status ? `${c.status} (${c.statusDuration}t)` : '—'}</strong></div>
+        <div>${h('stats.dmg')}<strong>${c.damage ? `${c.damage} ${escapeHtml(locDmgType)}` : t('wiki.label.noDamage')}</strong></div>
+        <div>${h('stats.status')}<strong>${c.status ? `${escapeHtml(locStatus)} (${h('stats.turnsShort', { n: c.statusDuration })})` : '—'}</strong></div>
       </div>
       <p class="catalog-desc wiki-detail-desc">${escapeHtml(descParts.join(' '))}</p>
     `;
@@ -831,15 +864,15 @@ function renderWorldDetail(entry, unlockedOutfits) {
     const guardianLinks = v.guardians.map(name => {
       const u = units.get(name);
       return u
-        ? `<button class="wiki-link-chip" data-wiki-jump-unit="${escapeHtml(name)}">${unitIconSvg(u, 16)}<span>${escapeHtml(name)}</span></button>`
-        : `<span class="tag-pill">${escapeHtml(name)}</span>`;
+        ? `<button class="wiki-link-chip" data-wiki-jump-unit="${escapeHtml(name)}">${unitIconSvg(u, 16)}<span>${escapeHtml(unitName(name))}</span></button>`
+        : `<span class="tag-pill">${escapeHtml(unitName(name))}</span>`;
     }).join('');
     return `
       <div class="wiki-detail-hero">
         <span class="wiki-detail-emblem" style="border-color:#e5c27b88">${vaultIconSvg(v.name, 56)}</span>
         <div>
           <div class="eyebrow">${h('wiki.filter.worldVaults')}</div>
-          <h2>${h('vault.name', { name: v.name })}</h2>
+          <h2>${h('vault.name', { name: vaultName(v.name) })}</h2>
         </div>
       </div>
       <div class="wiki-crosslinks"><span>${h('wiki.label.guardians')}:</span>${guardianLinks}</div>
@@ -852,7 +885,7 @@ function renderWorldDetail(entry, unlockedOutfits) {
         <span class="wiki-detail-emblem" style="border-color:#f8717188">${mutatorIconSvg(m, 56)}</span>
         <div>
           <div class="eyebrow">${h('wiki.filter.worldMutators')}</div>
-          <h2>${escapeHtml(m)}</h2>
+          <h2>${escapeHtml(mutatorName(m))}</h2>
         </div>
       </div>
       <p class="catalog-desc wiki-detail-desc">${h(`mutators.${m}`)}</p>
@@ -867,11 +900,11 @@ function renderWorldDetail(entry, unlockedOutfits) {
       <span class="wiki-detail-emblem" ${swatch}>${outfitIconSvg(w.name, 56)}</span>
       <div>
         <div class="eyebrow">${h('wiki.filter.worldOutfits')} · ${h(unlocked ? 'wiki.label.unlockedBadge' : 'wiki.label.lockedBadge')}</div>
-        <h2>${escapeHtml(w.name)}</h2>
+        <h2>${escapeHtml(outfitName(w.name))}</h2>
       </div>
     </div>
     <h3 class="wiki-section-title">${h('wiki.label.unlockCondition')}</h3>
-    <p class="catalog-desc wiki-detail-desc">${escapeHtml(w.unlock || t('wiki.label.defaultOutfit'))}</p>
+    <p class="catalog-desc wiki-detail-desc">${escapeHtml(outfitUnlock(w))}</p>
   `;
 }
 
@@ -894,10 +927,10 @@ function optionList(items, selected) {
 
 function buildFilterControlsHtml(category, f) {
   const controls = [];
-  const dmgOpts = [['all', t('wiki.filter.anyElement')], ...DAMAGE_TYPES.map(d => [d, d])];
+  const dmgOpts = [['all', t('wiki.filter.anyElement')], ...DAMAGE_TYPES.map(d => [d, damageTypeName(d)])];
 
   if (category === 'monsters' || category === 'bosses' || category === 'companions') {
-    controls.push(`<select data-wiki-filter="tag" aria-label="${h('wiki.filter.allTags')}">${optionList([['all', t('wiki.filter.allTags')], ...ALL_UNIT_TAGS.map(tg => [tg, tg])], f.tag)}</select>`);
+    controls.push(`<select data-wiki-filter="tag" aria-label="${h('wiki.filter.allTags')}">${optionList([['all', t('wiki.filter.allTags')], ...ALL_UNIT_TAGS.map(tg => [tg, tagName(tg)])], f.tag)}</select>`);
     if (category === 'monsters') {
       controls.push(`<select data-wiki-filter="role" aria-label="${h('wiki.filter.role')}">${optionList([
         ['all', t('wiki.filter.roleAll')],
@@ -916,8 +949,8 @@ function buildFilterControlsHtml(category, f) {
         ['boss_special', t('wiki.filter.bossSpecial')],
       ], f.bossType)}</select>`);
     }
-    controls.push(`<select data-wiki-filter="weak" aria-label="${h('wiki.filter.weakTo')}">${optionList([['all', t('wiki.filter.weakTo')], ...DAMAGE_TYPES.map(d => [d, `${t('wiki.label.weaknesses')}: ${d}`])], f.weak)}</select>`);
-    controls.push(`<select data-wiki-filter="resist" aria-label="${h('wiki.filter.resists')}">${optionList([['all', t('wiki.filter.resists')], ...DAMAGE_TYPES.map(d => [d, `${t('wiki.label.resistances')}: ${d}`])], f.resist)}</select>`);
+    controls.push(`<select data-wiki-filter="weak" aria-label="${h('wiki.filter.weakTo')}">${optionList([['all', t('wiki.filter.weakTo')], ...DAMAGE_TYPES.map(d => [d, `${t('wiki.label.weaknesses')}: ${damageTypeName(d)}`])], f.weak)}</select>`);
+    controls.push(`<select data-wiki-filter="resist" aria-label="${h('wiki.filter.resists')}">${optionList([['all', t('wiki.filter.resists')], ...DAMAGE_TYPES.map(d => [d, `${t('wiki.label.resistances')}: ${damageTypeName(d)}`])], f.resist)}</select>`);
     if (category === 'monsters') {
       controls.push(`<select data-wiki-filter="trait">${optionList([
         ['all', t('wiki.filter.traitAll')],
@@ -935,8 +968,8 @@ function buildFilterControlsHtml(category, f) {
         : [['name', t('wiki.sort.name')], ['hpDesc', t('wiki.sort.hpDesc')]];
     controls.push(`<select data-wiki-filter="sort">${optionList(sortOpts, f.sort)}</select>`);
   } else if (category === 'spells') {
-    controls.push(`<select data-wiki-filter="tag">${optionList([['all', t('wiki.filter.allTags')], ...tags.map(tg => [tg, tg])], f.tag)}</select>`);
-    controls.push(`<select data-wiki-filter="level">${optionList([['all', t('compendium.allLevels')], ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map(l => [String(l), `Lvl ${l}`])], f.level)}</select>`);
+    controls.push(`<select data-wiki-filter="tag">${optionList([['all', t('wiki.filter.allTags')], ...tags.map(tg => [tg, tagName(tg)])], f.tag)}</select>`);
+    controls.push(`<select data-wiki-filter="level">${optionList([['all', t('compendium.allLevels')], ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map(l => [String(l), t('compendium.levelOption', { level: l })])], f.level)}</select>`);
     controls.push(`<select data-wiki-filter="dmgType">${optionList([['all', t('wiki.filter.damageTypeAll')], ['utility', t('wiki.filter.utility')], ...dmgOpts.slice(1)], f.dmgType)}</select>`);
     controls.push(`<select data-wiki-filter="special">${optionList([
       ['all', t('wiki.filter.spellSpecialAll')],
@@ -955,7 +988,7 @@ function buildFilterControlsHtml(category, f) {
     ], f.sort)}</select>`);
   } else if (category === 'equipment') {
     controls.push(`<select data-wiki-filter="slot">${optionList([['all', t('compendium.allSlots')], ...equipmentSlots.map(s => [s, t(`slots.${s.toLowerCase()}`)])], f.slot)}</select>`);
-    controls.push(`<select data-wiki-filter="tag">${optionList([['all', t('wiki.filter.allTags')], ...tags.map(tg => [tg, tg])], f.tag)}</select>`);
+    controls.push(`<select data-wiki-filter="tag">${optionList([['all', t('wiki.filter.allTags')], ...tags.map(tg => [tg, tagName(tg)])], f.tag)}</select>`);
     controls.push(`<select data-wiki-filter="cost">${optionList([
       ['all', t('wiki.filter.costAll')],
       ['2', t('wiki.filter.costN', { n: 2 })],
@@ -982,7 +1015,7 @@ function buildFilterControlsHtml(category, f) {
       ['pickup', t('wiki.filter.itemPickup')],
       ['artifact', t('wiki.filter.itemArtifact')],
     ], f.itemType)}</select>`);
-    controls.push(`<select data-wiki-filter="tag">${optionList([['all', t('wiki.filter.allTags')], ...tags.map(tg => [tg, tg])], f.tag)}</select>`);
+    controls.push(`<select data-wiki-filter="tag">${optionList([['all', t('wiki.filter.allTags')], ...tags.map(tg => [tg, tagName(tg)])], f.tag)}</select>`);
     controls.push(`<select data-wiki-filter="tier">${optionList([
       ['all', t('wiki.filter.tierAll')],
       ['1', t('wiki.filter.tierN', { n: 1 })],
