@@ -25,6 +25,7 @@ import {
   uiIconSvg, unitIconSvg, wizardPortraitSvg,
 } from './svg-icons.js';
 import { totalWikiEntries } from './wiki.js';
+import { formatEquipmentSlotTooltip, formatSpellTooltip } from './tooltips.js';
 import { $, cleanCatalogDesc, escapeHtml, h } from './dom.js';
 
 export function initStaticIcons() {
@@ -309,7 +310,7 @@ export function renderHud(state, { onRender, onSaveProfile }) {
     const canUse = game.status === 'playing' && (s.maxCharges === 0 || charges > 0) && (!s.hpCost || game.player.hp > s.hpCost);
     const meta = `${s.damage ? `${s.damage} ${t('stats.dmg')}` : behaviorName(s.behavior)} · ${t('stats.rangeShort', { n: s.range })}${s.radius ? ` · ${t('stats.areaShort', { n: s.radius })}` : ''}${s.hpCost ? ` · -${s.hpCost}${t('stats.hp')}` : ''}${s.quickCast ? ` · ⚡${t('stats.quickCastShort')}` : ''}`;
     const chargeText = s.maxCharges === 0 ? '∞' : `${charges}/${s.maxCharges}`;
-    const tooltip = grimoireSpellDesc(s);
+    const tooltip = formatSpellTooltip(s);
     return `<button class="spell ${state.selected === s.id ? 'selected' : ''}" data-spell="${s.id}" data-tooltip="${escapeHtml(tooltip)}" aria-pressed="${state.selected === s.id}" ${canUse ? '' : 'disabled'}>
       <span class="spell-icon" style="border-color:${s.color}55">${spellIconSvg(s, 26)}</span>
       <span class="spell-text"><strong>${escapeHtml(grimoireSpellName(s))}</strong><small>${escapeHtml(meta)}</small></span>
@@ -323,7 +324,8 @@ export function renderHud(state, { onRender, onSaveProfile }) {
     const wornDef = worn ? equipmentByName.get(worn.name) : null;
     const item = equippedLabel(game, slot);
     const iconHtml = wornDef ? equipmentIconSvg(wornDef, 18) : slotIconSvg(slot, 15);
-    return `<div class="eq-slot-row"><span class="eq-slot-label">${iconHtml}<span>${h(`slots.${slot.toLowerCase()}`)}</span></span><strong>${item ? escapeHtml(item) : '—'}</strong></div>`;
+    const tooltip = formatEquipmentSlotTooltip(game, slot);
+    return `<div class="eq-slot-row ${item ? 'equipped' : ''}" tabindex="0" data-tooltip="${escapeHtml(tooltip)}"><span class="eq-slot-label">${iconHtml}<span>${h(`slots.${slot.toLowerCase()}`)}</span></span><strong>${item ? escapeHtml(item) : '—'}</strong></div>`;
   }).join('');
 
   const turns = [...new Set(game.log.map(entry => entry.turn))];
@@ -481,7 +483,8 @@ export function renderForgeView(state) {
       const worn = Object.values(game.equipment).find(e => equipmentByName.get(e.name)?.slot === slot);
       const wornDef = worn ? equipmentByName.get(worn.name) : null;
       const item = equippedLabel(game, slot);
-      return `<div class="loadout-slot-card ${item ? 'equipped' : ''}">
+      const tooltip = formatEquipmentSlotTooltip(game, slot);
+      return `<div class="loadout-slot-card ${item ? 'equipped' : ''}" tabindex="0" data-tooltip="${escapeHtml(tooltip)}">
         ${wornDef ? equipmentIconSvg(wornDef, 26) : slotIconSvg(slot, 22)}
         <div>
           <span>${h(`slots.${slot.toLowerCase()}`)}</span>

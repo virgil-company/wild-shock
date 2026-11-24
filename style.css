@@ -108,8 +108,9 @@ input:focus, select:focus {
   top: 0;
   left: 0;
   width: max-content;
-  max-width: min(240px, calc(100% - 16px));
+  max-width: min(290px, calc(100% - 16px));
   overflow-wrap: anywhere;
+  white-space: pre-line;
   padding: 8px 10px;
   border: 1px solid var(--line-gold);
   border-radius: var(--radius-sm);
@@ -670,6 +671,13 @@ canvas {
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   font-size: 11px;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.eq-slot-row.equipped { border-color: rgba(229, 194, 123, 0.35); }
+.eq-slot-row:hover, .eq-slot-row:focus-visible {
+  border-color: var(--line-gold);
+  background: var(--panel-high);
+  outline: none;
 }
 .eq-slot-label {
   display: inline-flex;
@@ -1039,8 +1047,14 @@ canvas {
   background: var(--surface-low);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
+  transition: border-color 0.15s ease, background 0.15s ease;
 }
 .loadout-slot-card.equipped { border-color: rgba(229, 194, 123, 0.5); }
+.loadout-slot-card:hover, .loadout-slot-card:focus-visible {
+  border-color: var(--line-gold);
+  background: var(--panel-high);
+  outline: none;
+}
 .loadout-slot-card div { min-width: 0; }
 .loadout-slot-card span {
   display: block;
