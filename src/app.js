@@ -10,6 +10,7 @@ import {
 } from './ui/views.js';
 import { createWikiController } from './ui/wiki.js';
 import { bindInput } from './ui/input.js';
+import { bindTooltips } from './ui/tooltips.js';
 
 const loaded = loadStorageItem(SAVE_KEY);
 const state = {
@@ -105,6 +106,7 @@ document.addEventListener('localechange', () => {
 });
 
 bindInput(canvas, state, { render, draw: () => board.draw(), setView, action, saveProfile });
+bindTooltips();
 initStaticIcons();
 document.body.classList.add('view-realm');
 translatePage();
