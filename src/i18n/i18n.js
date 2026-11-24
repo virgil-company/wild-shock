@@ -14,6 +14,7 @@ const normalizeLocale = value => Object.hasOwn(locales, value) ? value : 'en';
 let locale = 'en';
 try { locale = normalizeLocale(globalThis.window?.localStorage?.getItem('wild-shock-locale')); } catch { /* Storage may be disabled. */ }
 export const getLocale = () => locale;
+export const hasKey = key => Object.hasOwn(locales[locale], key) || Object.hasOwn(en, key);
 
 // Parameters can contain translation references so saved events stay language neutral.
 export function t(key, params = {}) {

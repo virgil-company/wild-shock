@@ -1,4 +1,4 @@
-import { componentName, equipmentName } from '../i18n/game-text.js';
+import { componentName, equipmentName, tagName } from '../i18n/game-text.js';
 import { t } from '../i18n/i18n.js';
 import {
   SIZE, availableSpells, cast, createGame, deploy, distance, drink, forge,
@@ -110,12 +110,12 @@ export function bindInput(canvas, state, controllers) {
     if (!chosen) return;
     const list = $('ingredient-choices');
     $('ingredient-title').textContent = equipmentName(name);
-    $('ingredient-recipe').textContent = item.recipe.map(([tag, count]) => count + ' × ' + tag).join(' + ');
+    $('ingredient-recipe').textContent = item.recipe.map(([tag, count]) => `${count} × ${tagName(tag)}`).join(' + ');
     const options = [...new Set(state.game.components)];
     list.replaceChildren(...Array.from({ length: item.recipe_cost }, (_, i) => {
       const select = document.createElement('select');
       select.setAttribute('aria-label', t('forge.ingredient', { n: i + 1 }));
-      select.replaceChildren(new Option('—', ''), ...options.map(c => new Option(componentName(c) + ' · ' + componentByName.get(c).tags.join('/'), c)));
+      select.replaceChildren(new Option('—', ''), ...options.map(c => new Option(componentName(c) + ' · ' + componentByName.get(c).tags.map(tagName).join('/'), c)));
       select.value = chosen[i] || '';
       return select;
     }));

@@ -1,7 +1,7 @@
 import { ENEMY_ARCHETYPES, SIZE, getModeConfig } from '../data/constants.js';
 import { getUnitMeta, pick, readyAttack, summonedBy, unitStats, units } from '../data/bestiary.js';
 import { equipmentByName, getSpellUpgradeId, knownSpellIds, spellByName } from '../rules/core.js';
-import { enemyNameKey, textRef } from '../i18n/text-keys.js';
+import { enemyNameKey, namedKey, slugKey, textRef } from '../i18n/text-keys.js';
 import { areaCells, canStand, distance, findBestStepToward, findOpenTileNear, hasSight, isPassable, isTileOccupied, random, shortestPath } from './grid.js';
 import { equipped, log, maxHealth, withActionContext } from './context.js';
 import { applyStatus, damageAlly, damageEnemy, damagePlayer, strikeUnit } from './combat.js';
@@ -90,7 +90,8 @@ export function recruitCompanion(game, species, name, present = null) {
   ally.name = name;
   ally.companion = true;
   game.companions.push({ species, name });
-  log(game, 'log.companion', { name }, 'green');
+  const companionRef = units.has(name) ? textRef(namedKey('units', name)) : textRef(`allies.${slugKey(name)}`);
+  log(game, 'log.companion', { name: companionRef }, 'green');
 }
 
 export function orbDamage(game, orb, enemy, amount, type) {
@@ -476,7 +477,7 @@ export function enemyTurn(game, enemy, spawnedThisTurn = null, extraTurn = false
         }
         if (spawnedThisTurn) spawnedThisTurn.push(spawned);
         else game.enemies.push(spawned);
-        log(game, 'log.spawned', { enemy: spawned.name }, 'red');
+        log(game, 'log.spawned', { enemy: spawned.species ? textRef(namedKey('units', spawned.species)) : textRef(enemyNameKey(spawned)) }, 'red');
       }
     }
     return;
@@ -524,7 +525,7 @@ export function enemyTurn(game, enemy, spawnedThisTurn = null, extraTurn = false
   const attack = readyAttack(enemy, gap, game.turn);
   if (gap <= effectiveRange && (!enemy.species || attack) && hasSight(game, enemy, target)) {
     const dealt = strikeUnit(game, enemy, target, attack, false);
-    if (target === game.player) log(game, 'log.hit', { enemy: enemy.species || textRef(enemyNameKey(enemy)), damage: dealt }, 'red');
+    if (target === game.player) log(game, 'log.hit', { enemy: enemy.species ? textRef(namedKey('units', enemy.species)) : textRef(enemyNameKey(enemy)), damage: dealt }, 'red');
     else game.effects.push({ x: target.x, y: target.y, color: '#f87171' });
   } else if (!enemy.stationary && !enemy.statuses.immobilized) {
     const moves = [[0, 1], [1, 0], [0, -1], [-1, 0]]

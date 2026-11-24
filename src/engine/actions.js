@@ -2,7 +2,7 @@ import { SIZE, TICK_DECAY_STATUSES } from '../data/constants.js';
 import { pick } from '../data/bestiary.js';
 import { nodeMap, spellInfo } from '../data/catalog.js';
 import { enhanceSpell } from '../data/artifacts.js';
-import { namedKey, textRef } from '../i18n/text-keys.js';
+import { namedKey, spellNameKey, textRef, upgradeNameKey } from '../i18n/text-keys.js';
 import {
   addComponent, canLearnSpell, canLearnUpgrade, componentByName,
   effectiveSpell, equipItem, equipmentByName, forge as forgeEquipment,
@@ -85,7 +85,7 @@ export function collectItem(game, item) {
       const boost = game.spellBoosts[spell.id] ??= {};
       boost.max_charges = (boost.max_charges || 0) + spell.maxCharges;
       game.charges[spell.id] += spell.maxCharges;
-      log(game, 'log.tome', { spell: spell.name }, 'gold');
+      log(game, 'log.tome', { spell: textRef(spellNameKey(spell.spellId)) }, 'gold');
     }
   } else if (item.type === 'companion') {
     recruitCompanion(game, item.name, item.name);
@@ -446,11 +446,11 @@ export function wait(game) {
           if (Object.values(game.equipment).some(e => e.components.includes('Cursed Rosary') && equipmentByName.get(e.name)?.tags.some(tag => tag === 'Dark' || tag === 'Ritual'))) {
             game.player.hp = maxHealth(game);
           }
-          log(game, 'log.ritualComplete', { spell: spell.name }, 'gold');
+          log(game, 'log.ritualComplete', { spell: textRef(spellNameKey(spell.spellId)) }, 'gold');
         }
         game.channel = null;
       } else {
-        log(game, 'log.channeling', { spell: spell.name, turns: game.channel.turnsLeft }, 'gold');
+        log(game, 'log.channeling', { spell: textRef(spellNameKey(spell.spellId)), turns: game.channel.turnsLeft }, 'gold');
       }
       cleanup(game);
       endTurn(game);
@@ -522,7 +522,7 @@ export function learnSpell(game, spellId) {
   game.spells.push(spellId);
   const eff = effectiveSpell(game, spellId);
   game.charges[eff.id] = eff.maxCharges;
-  log(game, 'log.learnedSpell', { spell: base.name }, 'gold');
+  log(game, 'log.learnedSpell', { spell: textRef(spellNameKey(base.id)) }, 'gold');
   return true;
 }
 
@@ -538,7 +538,7 @@ export function learnUpgrade(game, spellId, spId) {
   game.spellUpgrades[spellId].push(spId);
   const eff = effectiveSpell(game, spellId);
   game.charges[eff.id] = Math.max(0, Math.min(eff.maxCharges, (game.charges[eff.id] || 0) + eff.maxCharges - previousCapacity));
-  log(game, 'log.upgradedSpell', { spell: base.name, upgrade: upgrade.name }, 'gold');
+  log(game, 'log.upgradedSpell', { spell: textRef(spellNameKey(base.id)), upgrade: textRef(upgradeNameKey(upgrade.sp_id)) }, 'gold');
   return true;
 }
 
@@ -641,7 +641,7 @@ export function useShrine(game, options = {}) {
     game.spellBoosts[chosen.id].minion_damage = (game.spellBoosts[chosen.id].minion_damage || 0) + 3;
     game.charges[chosen.id] = (game.charges[chosen.id] || 0) + 2;
     game.shrine.uses--;
-    log(game, 'log.shrineEmpowered', { spell: chosen.name }, 'gold');
+    log(game, 'log.shrineEmpowered', { spell: textRef(spellNameKey(chosen.spellId)) }, 'gold');
     endTurn(game);
     return true;
   }
@@ -672,14 +672,14 @@ export function claimReward(game, choice) {
     if (!game.spells.includes(choice)) game.spells.push(choice);
     const spell = effectiveSpell(game, choice);
     game.charges[spell.id] = spell.maxCharges;
-    log(game, 'log.learnedSpell', { spell: spell.name }, 'gold');
+    log(game, 'log.learnedSpell', { spell: textRef(spellNameKey(spell.spellId)) }, 'gold');
   } else {
     const item = equipmentByName.get(choice);
     if (!item) return false;
     const previous = availableSpells(game);
     equipItem(game, item);
     syncCharges(game, previous);
-    log(game, 'log.forged', { item: choice, slot: textRef('slots.' + item.slot.toLowerCase()) }, 'gold');
+    log(game, 'log.forged', { item: textRef(namedKey('equipment', item.name)), slot: textRef('slots.' + item.slot.toLowerCase()) }, 'gold');
   }
   game.pendingReward = null;
   return true;

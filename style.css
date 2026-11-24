@@ -51,7 +51,20 @@ a { color: inherit; text-decoration: none; }
 [hidden] { display: none !important; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
 
-.ws-icon { display: inline-block; vertical-align: middle; flex-shrink: 0; }
+.ws-icon { display: inline-block; vertical-align: middle; flex-shrink: 0; max-width: 100%; max-height: 100%; }
+.card-emblem svg, .wiki-emblem svg, .wiki-detail-emblem svg, .inspect-symbol svg, .spell-icon svg, #shrine-icon-slot svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+}
+.reward-option-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+}
 
 /* Buttons & Inputs */
 button {
@@ -610,12 +623,14 @@ canvas {
 .spell-icon {
   width: 34px;
   height: 34px;
+  padding: 2px;
   border-radius: 6px;
   display: grid;
   place-items: center;
   background: var(--surface-lowest);
   border: 1px solid var(--line);
   flex-shrink: 0;
+  overflow: hidden;
 }
 .spell-text { flex: 1; min-width: 0; }
 .spell-text strong {
@@ -889,12 +904,14 @@ canvas {
 .inspect-symbol {
   width: 44px;
   height: 44px;
+  padding: 2px;
   border-radius: 6px;
   background: var(--surface-lowest);
   border: 1px solid var(--line);
   display: grid;
   place-items: center;
   flex-shrink: 0;
+  overflow: hidden;
 }
 .inspect-panel h3 { font-size: 15px; color: var(--gold-bright); margin: 0; }
 .inspect-panel p { margin: 6px 0; font-size: 11px; color: var(--muted); line-height: 1.55; }
@@ -1088,14 +1105,16 @@ canvas {
 }
 .catalog-card-title-group { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .card-emblem {
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
+  padding: 2px;
   border-radius: 6px;
   background: var(--surface-lowest);
   border: 1px solid var(--line);
   display: grid;
   place-items: center;
   flex-shrink: 0;
+  overflow: hidden;
 }
 .catalog-card-head h3 { font-size: 16px; color: var(--text); line-height: 1.25; }
 .catalog-badge {
@@ -1587,8 +1606,9 @@ footer {
   box-shadow: inset 3px 0 0 rgba(74, 222, 128, 0.65);
 }
 .wiki-emblem {
-  width: 42px;
-  height: 42px;
+  width: 46px;
+  height: 46px;
+  padding: 2px;
 }
 .wiki-title-stack {
   min-width: 0;
@@ -1746,8 +1766,9 @@ footer {
   font-size: 24px;
 }
 .wiki-detail-emblem {
-  width: 68px;
-  height: 68px;
+  width: 72px;
+  height: 72px;
+  padding: 4px;
   border-radius: 10px;
   background: var(--surface-lowest);
   border: 1.5px solid var(--line-gold);
@@ -1755,6 +1776,7 @@ footer {
   place-items: center;
   flex-shrink: 0;
   box-shadow: 0 0 20px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
 }
 .wiki-detail-stats-4 {
   grid-template-columns: repeat(4, minmax(0, 1fr));

@@ -1,7 +1,7 @@
 import { DEBUFF_STATUSES, SIZE } from '../data/constants.js';
 import { getUnitMeta, unitStats, units } from '../data/bestiary.js';
 import { computeElementalDamage, equipmentByName } from '../rules/core.js';
-import { enemyNameKey, textRef } from '../i18n/text-keys.js';
+import { enemyNameKey, namedKey, textRef } from '../i18n/text-keys.js';
 import { areaCells, canStand, distance, findOpenTileNear, hasSight } from './grid.js';
 import {
   awardPoints, buildEffectRecord, currentAction, currentTurnId,
@@ -359,7 +359,9 @@ export function cleanup(game) {
     for (const name of [...(enemy.previousForms || []), enemy.species]) {
       if (name && !game.defeatedSpecies.includes(name)) game.defeatedSpecies.push(name);
     }
-    log(game, 'log.fall', { enemy: enemy.species || (enemy.isSpawner ? enemy.name : textRef(enemyNameKey(enemy))) }, 'green');
+    log(game, 'log.fall', {
+      enemy: enemy.isSpawner ? textRef('allies.rift-lair') : enemy.species ? textRef(namedKey('units', enemy.species)) : textRef(enemyNameKey(enemy)),
+    }, 'green');
     onUnitDeath(game, enemy, false);
     equipmentAction(game, 'kill', { victim: enemy, cause: enemy.killedBy || null });
     if (game.buffs.some(b => b.type === 'The Restless Dead') && enemy.tags?.includes('Living')) {

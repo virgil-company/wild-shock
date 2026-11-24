@@ -3,12 +3,13 @@ import { artifacts } from '../data/artifacts.js';
 import { mutators, outfitColor, vaults } from '../data/campaign.js';
 import { CLOUD_TYPES, DAMAGE_TYPES, SHRINE_TYPES, equipmentSlots } from '../data/constants.js';
 import { getUnitMeta, searchCatalogue, units } from '../data/bestiary.js';
-import { craftableEquipment, knownSpellIds, spellByName } from '../rules/core.js';
+import { craftableEquipment, equipmentByName, knownSpellIds, spellByName } from '../rules/core.js';
 import { componentName, equipmentName } from '../i18n/game-text.js';
 import { t } from '../i18n/i18n.js';
 import {
-  TAG_COLORS, cloudIconSvg, componentIconSvg, entityIconSvg,
-  shrineIconSvg, slotIconSvg, tagIconSvg, unitIconSvg,
+  TAG_COLORS, artifactIconSvg, cloudIconSvg, componentIconSvg, entityIconSvg,
+  equipmentIconSvg, mutatorIconSvg, outfitIconSvg, pickupIconSvg,
+  shrineIconSvg, slotIconSvg, spellIconSvg, tagIconSvg, unitIconSvg, vaultIconSvg,
 } from './svg-icons.js';
 import { cleanCatalogDesc, escapeHtml, h } from './dom.js';
 
@@ -384,7 +385,7 @@ function renderUnitCard(unit, category, defeatedSet) {
   return `<article class="catalog-card wiki-card ${unit.is_boss ? 'wiki-card-boss' : ''} ${defeated ? 'wiki-card-discovered' : ''}" data-wiki-open="${escapeHtml(category)}:${escapeHtml(unit.name)}" tabindex="0" role="button">
     <div class="catalog-card-head">
       <div class="catalog-card-title-group">
-        <span class="card-emblem wiki-emblem" style="border-color:${primaryColor}66">${unitIconSvg(unit, 26)}</span>
+        <span class="card-emblem wiki-emblem" style="border-color:${primaryColor}66">${unitIconSvg(unit, 36)}</span>
         <div class="wiki-title-stack">
           <h3>${escapeHtml(unit.name)}</h3>
           ${traits.length ? `<small class="wiki-submeta">${escapeHtml(traits.join(' · '))}</small>` : ''}
@@ -419,7 +420,7 @@ function renderSpellCard(spell, learnedSet) {
   return `<article class="catalog-card wiki-card ${isLearned ? 'learned-card' : ''}" data-wiki-open="spells:${spell.id}" tabindex="0" role="button">
     <div class="catalog-card-head">
       <div class="catalog-card-title-group">
-        <span class="card-emblem wiki-emblem" style="border-color:${primaryColor}66">${tagIconSvg(primaryTag, 26)}</span>
+        <span class="card-emblem wiki-emblem" style="border-color:${primaryColor}66">${spellIconSvg(spell, 36)}</span>
         <div class="wiki-title-stack">
           <h3>${escapeHtml(spell.name)}</h3>
           ${spell.granted_by ? `<small class="wiki-submeta">${h('book.requires', { item: equipmentName(spell.granted_by) })}</small>` : ''}
@@ -453,7 +454,7 @@ function renderEquipmentCard(item, equippedSet, craftableSet) {
   return `<article class="catalog-card wiki-card ${isEquipped ? 'learned-card' : canCraft ? 'craftable-card' : ''}" data-wiki-open="equipment:${escapeHtml(item.name)}" tabindex="0" role="button">
     <div class="catalog-card-head">
       <div class="catalog-card-title-group">
-        <span class="card-emblem wiki-emblem" style="border-color:${primaryColor}66">${slotIconSvg(item.slot, 24)}</span>
+        <span class="card-emblem wiki-emblem" style="border-color:${primaryColor}66">${equipmentIconSvg(item, 36)}</span>
         <div class="wiki-title-stack">
           <h3>${escapeHtml(locName)}</h3>
           ${locName !== item.name ? `<small class="wiki-submeta">${escapeHtml(item.name)}</small>` : ''}
@@ -480,7 +481,7 @@ function renderItemCard(entry) {
     return `<article class="catalog-card wiki-card ${c.rare ? 'craftable-card' : ''}" data-wiki-open="items:${escapeHtml(entry.id)}" tabindex="0" role="button">
       <div class="catalog-card-head">
         <div class="catalog-card-title-group">
-          <span class="card-emblem wiki-emblem" style="border-color:${c.rare ? '#ffdf9f' : primaryColor + '66'}">${componentIconSvg(c, 26)}</span>
+          <span class="card-emblem wiki-emblem" style="border-color:${c.rare ? '#ffdf9f' : primaryColor + '66'}">${componentIconSvg(c, 36)}</span>
           <div class="wiki-title-stack">
             <h3>${escapeHtml(locName)}</h3>
             ${locName !== c.name ? `<small class="wiki-submeta">${escapeHtml(c.name)}</small>` : ''}
@@ -502,7 +503,7 @@ function renderItemCard(entry) {
     return `<article class="catalog-card wiki-card" data-wiki-open="items:${escapeHtml(entry.id)}" tabindex="0" role="button">
       <div class="catalog-card-head">
         <div class="catalog-card-title-group">
-          <span class="card-emblem wiki-emblem">${entityIconSvg(p.icon, 26)}</span>
+          <span class="card-emblem wiki-emblem">${pickupIconSvg(p.id, 36)}</span>
           <h3>${h(p.titleKey)}</h3>
         </div>
         <span class="catalog-badge">${h('wiki.filter.itemPickup')}</span>
@@ -516,7 +517,7 @@ function renderItemCard(entry) {
   return `<article class="catalog-card wiki-card" data-wiki-open="items:${escapeHtml(entry.id)}" tabindex="0" role="button">
     <div class="catalog-card-head">
       <div class="catalog-card-title-group">
-        <span class="card-emblem wiki-emblem" style="border-color:#ffdf9f66">${entityIconSvg('artifact', 26)}</span>
+        <span class="card-emblem wiki-emblem" style="border-color:#ffdf9f66">${artifactIconSvg(a, 36)}</span>
         <h3>${h(`artifacts.${a.id}.name`)}</h3>
       </div>
       <span class="catalog-badge">${h('wiki.filter.itemArtifact')}</span>
@@ -533,7 +534,7 @@ function renderWorldCard(entry, unlockedOutfits) {
     return `<article class="catalog-card wiki-card" data-wiki-open="world:${escapeHtml(entry.id)}" tabindex="0" role="button">
       <div class="catalog-card-head">
         <div class="catalog-card-title-group">
-          <span class="card-emblem wiki-emblem" style="border-color:#7bd0ff55">${shrineIconSvg(s, 26)}</span>
+          <span class="card-emblem wiki-emblem" style="border-color:#7bd0ff55">${shrineIconSvg(s, 36)}</span>
           <h3>${h(`shrine.${s}`)}</h3>
         </div>
         <span class="catalog-badge">${h('wiki.filter.worldShrines')}</span>
@@ -550,7 +551,7 @@ function renderWorldCard(entry, unlockedOutfits) {
     return `<article class="catalog-card wiki-card" data-wiki-open="world:${escapeHtml(entry.id)}" tabindex="0" role="button">
       <div class="catalog-card-head">
         <div class="catalog-card-title-group">
-          <span class="card-emblem wiki-emblem" style="border-color:${c.color}66">${cloudIconSvg(c.color, 26)}</span>
+          <span class="card-emblem wiki-emblem" style="border-color:${c.color}66">${cloudIconSvg(c, 36)}</span>
           <h3>${escapeHtml(c.name)}</h3>
         </div>
         <span class="catalog-badge">${h('wiki.filter.worldClouds')}</span>
@@ -568,7 +569,7 @@ function renderWorldCard(entry, unlockedOutfits) {
     return `<article class="catalog-card wiki-card" data-wiki-open="world:${escapeHtml(entry.id)}" tabindex="0" role="button">
       <div class="catalog-card-head">
         <div class="catalog-card-title-group">
-          <span class="card-emblem wiki-emblem" style="border-color:#e5c27b66">${entityIconSvg('vault', 26)}</span>
+          <span class="card-emblem wiki-emblem" style="border-color:#e5c27b66">${vaultIconSvg(v.name, 36)}</span>
           <h3>${h('vault.name', { name: v.name })}</h3>
         </div>
         <span class="catalog-badge">${h('wiki.filter.worldVaults')}</span>
@@ -582,7 +583,7 @@ function renderWorldCard(entry, unlockedOutfits) {
     return `<article class="catalog-card wiki-card" data-wiki-open="world:${escapeHtml(entry.id)}" tabindex="0" role="button">
       <div class="catalog-card-head">
         <div class="catalog-card-title-group">
-          <span class="card-emblem wiki-emblem" style="border-color:#f8717166">${entityIconSvg('mutator', 26)}</span>
+          <span class="card-emblem wiki-emblem" style="border-color:#f8717166">${mutatorIconSvg(m, 36)}</span>
           <h3>${escapeHtml(m)}</h3>
         </div>
         <span class="catalog-badge">${h('wiki.filter.worldMutators')}</span>
@@ -594,11 +595,11 @@ function renderWorldCard(entry, unlockedOutfits) {
   const w = entry.data;
   const unlocked = unlockedOutfits.has(w.name);
   const colors = outfitColor(w.name);
-  const swatch = colors ? `style="background:linear-gradient(135deg, ${colors.hat}, ${colors.robe});border-color:${colors.hat}"` : '';
+  const swatch = colors ? `style="border-color:${colors.hat}"` : '';
   return `<article class="catalog-card wiki-card ${unlocked ? 'learned-card' : ''}" data-wiki-open="world:${escapeHtml(entry.id)}" tabindex="0" role="button">
     <div class="catalog-card-head">
       <div class="catalog-card-title-group">
-        <span class="card-emblem wiki-emblem" ${swatch}>${entityIconSvg('outfit', 24)}</span>
+        <span class="card-emblem wiki-emblem" ${swatch}>${outfitIconSvg(w.name, 36)}</span>
         <h3>${escapeHtml(w.name)}</h3>
       </div>
       <span class="catalog-badge">${h(unlocked ? 'wiki.label.unlockedBadge' : 'wiki.label.lockedBadge')}</span>
@@ -637,7 +638,7 @@ function renderUnitDetail(unit, defeatedSet) {
 
   return `
     <div class="wiki-detail-hero">
-      <span class="wiki-detail-emblem" style="border-color:${primaryColor}88">${unitIconSvg(unit, 46)}</span>
+      <span class="wiki-detail-emblem" style="border-color:${primaryColor}88">${unitIconSvg(unit, 56)}</span>
       <div>
         <div class="eyebrow">${escapeHtml(roleLabel(unit))}${defeated ? ` · ${h('wiki.label.defeatedBadge')}` : ''}</div>
         <h2>${escapeHtml(unit.name)}</h2>
@@ -674,7 +675,7 @@ function renderSpellDetail(spell, learnedSet) {
   ).join('');
 
   const bookLink = spell.granted_by
-    ? `<div class="wiki-crosslinks"><span>${h('book.requires', { item: '' }).trim()}</span><button class="wiki-link-chip" data-wiki-jump-eq="${escapeHtml(spell.granted_by)}">${slotIconSvg('Weapon', 14)}<span>${escapeHtml(equipmentName(spell.granted_by))}</span></button></div>`
+    ? `<div class="wiki-crosslinks"><span>${h('book.requires', { item: '' }).trim()}</span><button class="wiki-link-chip" data-wiki-jump-eq="${escapeHtml(spell.granted_by)}">${equipmentIconSvg(equipmentByName.get(spell.granted_by), 16)}<span>${escapeHtml(equipmentName(spell.granted_by))}</span></button></div>`
     : '';
 
   const upgradesHtml = (spell.upgrades || []).length
@@ -688,7 +689,7 @@ function renderSpellDetail(spell, learnedSet) {
 
   return `
     <div class="wiki-detail-hero">
-      <span class="wiki-detail-emblem" style="border-color:${primaryColor}88">${tagIconSvg(primaryTag, 46)}</span>
+      <span class="wiki-detail-emblem" style="border-color:${primaryColor}88">${spellIconSvg(spell, 56)}</span>
       <div>
         <div class="eyebrow">${h('wiki.cat.spells')} · LVL ${spell.level}${isLearned ? ` · ${h('compendium.learnedBadge')}` : ''}</div>
         <h2>${escapeHtml(spell.name)}</h2>
@@ -720,7 +721,7 @@ function renderEquipmentDetail(item, equippedSet) {
 
   return `
     <div class="wiki-detail-hero">
-      <span class="wiki-detail-emblem" style="border-color:${primaryColor}88">${slotIconSvg(item.slot, 44)}</span>
+      <span class="wiki-detail-emblem" style="border-color:${primaryColor}88">${equipmentIconSvg(item, 56)}</span>
       <div>
         <div class="eyebrow">${h(`slots.${item.slot.toLowerCase()}`)}${equippedSet.has(item.name) ? ` · ${h('compendium.equippedSlot')}` : ''}</div>
         <h2>${escapeHtml(locName)}</h2>
@@ -731,7 +732,7 @@ function renderEquipmentDetail(item, equippedSet) {
     <div class="wiki-crosslinks"><span>${h('wiki.label.recipe')} (${item.recipe_cost}):</span>${recipePills}</div>
     ${(item.bonuses || []).length ? `<h3 class="wiki-section-title">${h('wiki.label.bonuses')}</h3><ul class="wiki-passive-list">${item.bonuses.map(b => `<li>${escapeHtml(cleanCatalogDesc(b))}</li>`).join('')}</ul>` : ''}
     ${item.desc ? `<h3 class="wiki-section-title">${h('wiki.label.effects')}</h3><p class="catalog-desc wiki-detail-desc">${escapeHtml(cleanCatalogDesc(item.desc))}</p>` : ''}
-    ${granted.length ? `<div class="wiki-crosslinks"><span>${h('wiki.label.grantedSpell')}:</span>${granted.map(s => `<button class="wiki-link-chip" data-wiki-jump-spell="${s.id}">${tagIconSvg(s.tags?.[0] || 'Arcane', 14)}<span>${escapeHtml(s.name)}</span></button>`).join('')}</div>` : ''}
+    ${granted.length ? `<div class="wiki-crosslinks"><span>${h('wiki.label.grantedSpell')}:</span>${granted.map(s => `<button class="wiki-link-chip" data-wiki-jump-spell="${s.id}">${spellIconSvg(s, 16)}<span>${escapeHtml(s.name)}</span></button>`).join('')}</div>` : ''}
     ${summonsLinks ? `<div class="wiki-crosslinks"><span>${h('wiki.label.summons')}:</span>${summonsLinks}</div>` : ''}
   `;
 }
@@ -746,7 +747,7 @@ function renderItemDetail(entry) {
     ).join('');
     return `
       <div class="wiki-detail-hero">
-        <span class="wiki-detail-emblem" style="border-color:${c.rare ? '#ffdf9f' : primaryColor + '88'}">${componentIconSvg(c, 46)}</span>
+        <span class="wiki-detail-emblem" style="border-color:${c.rare ? '#ffdf9f' : primaryColor + '88'}">${componentIconSvg(c, 56)}</span>
         <div>
           <div class="eyebrow">${h('wiki.filter.itemComponent')} · ${h('wiki.label.tier', { n: c.tier })} · ${h(c.rare ? 'wiki.label.rare' : 'wiki.label.common')}</div>
           <h2>${escapeHtml(locName)}</h2>
@@ -766,7 +767,7 @@ function renderItemDetail(entry) {
     const p = entry.data;
     return `
       <div class="wiki-detail-hero">
-        <span class="wiki-detail-emblem">${entityIconSvg(p.icon, 46)}</span>
+        <span class="wiki-detail-emblem">${pickupIconSvg(p.id, 56)}</span>
         <div>
           <div class="eyebrow">${h('wiki.filter.itemPickup')}</div>
           <h2>${h(p.titleKey)}</h2>
@@ -779,7 +780,7 @@ function renderItemDetail(entry) {
   const recipeText = Object.entries(a.recipe).map(([k, v]) => `${v}× ${t(`materials.${k}`)}`).join(' + ');
   return `
     <div class="wiki-detail-hero">
-      <span class="wiki-detail-emblem" style="border-color:#ffdf9f88">${entityIconSvg('artifact', 46)}</span>
+      <span class="wiki-detail-emblem" style="border-color:#ffdf9f88">${artifactIconSvg(a, 56)}</span>
       <div>
         <div class="eyebrow">${h('wiki.filter.itemArtifact')}</div>
         <h2>${h(`artifacts.${a.id}.name`)}</h2>
@@ -796,7 +797,7 @@ function renderWorldDetail(entry, unlockedOutfits) {
     const desc = s === 'transmutation' ? t('inspection.shrineDescription', { uses: 3 }) : t(`shrine.${s}Desc`);
     return `
       <div class="wiki-detail-hero">
-        <span class="wiki-detail-emblem" style="border-color:#7bd0ff88">${shrineIconSvg(s, 46)}</span>
+        <span class="wiki-detail-emblem" style="border-color:#7bd0ff88">${shrineIconSvg(s, 56)}</span>
         <div>
           <div class="eyebrow">${h('wiki.filter.worldShrines')}</div>
           <h2>${h(`shrine.${s}`)}</h2>
@@ -812,7 +813,7 @@ function renderWorldDetail(entry, unlockedOutfits) {
     if (c.status) descParts.push(t('wiki.cloud.statusOnly', { status: c.status, duration: c.statusDuration || 1 }));
     return `
       <div class="wiki-detail-hero">
-        <span class="wiki-detail-emblem" style="border-color:${c.color}88">${cloudIconSvg(c.color, 46)}</span>
+        <span class="wiki-detail-emblem" style="border-color:${c.color}88">${cloudIconSvg(c, 56)}</span>
         <div>
           <div class="eyebrow">${h('wiki.filter.worldClouds')}</div>
           <h2>${escapeHtml(c.name)}</h2>
@@ -835,7 +836,7 @@ function renderWorldDetail(entry, unlockedOutfits) {
     }).join('');
     return `
       <div class="wiki-detail-hero">
-        <span class="wiki-detail-emblem" style="border-color:#e5c27b88">${entityIconSvg('vault', 46)}</span>
+        <span class="wiki-detail-emblem" style="border-color:#e5c27b88">${vaultIconSvg(v.name, 56)}</span>
         <div>
           <div class="eyebrow">${h('wiki.filter.worldVaults')}</div>
           <h2>${h('vault.name', { name: v.name })}</h2>
@@ -848,7 +849,7 @@ function renderWorldDetail(entry, unlockedOutfits) {
     const m = entry.data;
     return `
       <div class="wiki-detail-hero">
-        <span class="wiki-detail-emblem" style="border-color:#f8717188">${entityIconSvg('mutator', 46)}</span>
+        <span class="wiki-detail-emblem" style="border-color:#f8717188">${mutatorIconSvg(m, 56)}</span>
         <div>
           <div class="eyebrow">${h('wiki.filter.worldMutators')}</div>
           <h2>${escapeHtml(m)}</h2>
@@ -860,10 +861,10 @@ function renderWorldDetail(entry, unlockedOutfits) {
   const w = entry.data;
   const unlocked = unlockedOutfits.has(w.name);
   const colors = outfitColor(w.name);
-  const swatch = colors ? `style="background:linear-gradient(135deg, ${colors.hat}, ${colors.robe});border-color:${colors.hat}"` : '';
+  const swatch = colors ? `style="border-color:${colors.hat}"` : '';
   return `
     <div class="wiki-detail-hero">
-      <span class="wiki-detail-emblem" ${swatch}>${entityIconSvg('outfit', 44)}</span>
+      <span class="wiki-detail-emblem" ${swatch}>${outfitIconSvg(w.name, 56)}</span>
       <div>
         <div class="eyebrow">${h('wiki.filter.worldOutfits')} · ${h(unlocked ? 'wiki.label.unlockedBadge' : 'wiki.label.lockedBadge')}</div>
         <h2>${escapeHtml(w.name)}</h2>

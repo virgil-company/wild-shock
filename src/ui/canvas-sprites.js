@@ -1,4 +1,27 @@
 import { outfitColor } from '../data/campaign.js';
+import { units } from '../data/bestiary.js';
+import { componentByName } from '../rules/core.js';
+import {
+  cloudIconSvg, componentIconSvg, entityIconSvg,
+  pickupIconSvg, shrineIconSvg, unitIconSvg,
+} from './svg-icons.js';
+
+// Cached SVG-to-Image sprite bridge so every monster, boss, companion, shrine, item, component,
+// and cloud on the 2D board renders its exact unique visual asset crisply with zero per-frame SVG overhead.
+const spriteImgCache = new Map();
+
+function getSvgSpriteImage(key, svgBuilder) {
+  if (typeof Image === 'undefined') return null;
+  let entry = spriteImgCache.get(key);
+  if (!entry) {
+    entry = { img: new Image(), ready: false };
+    const svg = svgBuilder();
+    entry.img.onload = () => { entry.ready = true; };
+    entry.img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    spriteImgCache.set(key, entry);
+  }
+  return entry.ready ? entry.img : null;
+}
 
 // High-Detail Canvas 2D Tileset & Sprite Renderer (32x32 per tile)
 
@@ -78,22 +101,29 @@ export function drawChasmTwinkle(ctx, x, y, tile, n, time) {
 export function drawCanvasCloud(ctx, cloud, tile, time) {
   const cx = cloud.x * tile + tile / 2;
   const cy = cloud.y * tile + tile / 2;
-  const pulse = 1 + 0.08 * Math.sin(time * 0.004 + cloud.x + cloud.y);
+  const pulse = 1 + 0.06 * Math.sin(time * 0.004 + cloud.x + cloud.y);
+  const drift = Math.sin(time * 0.003 + cloud.x * 2) * 1.4;
   ctx.save();
-  const grad = ctx.createRadialGradient(cx, cy, 2, cx, cy, tile * 0.55 * pulse);
-  grad.addColorStop(0, `${cloud.color}66`);
-  grad.addColorStop(0.65, `${cloud.color}33`);
+  const grad = ctx.createRadialGradient(cx, cy, 2, cx, cy, tile * 0.56 * pulse);
+  grad.addColorStop(0, `${cloud.color}44`);
+  grad.addColorStop(0.65, `${cloud.color}22`);
   grad.addColorStop(1, `${cloud.color}00`);
   ctx.fillStyle = grad;
   ctx.fillRect(cloud.x * tile, cloud.y * tile, tile, tile);
 
-  ctx.fillStyle = `${cloud.color}55`;
-  const drift = Math.sin(time * 0.003 + cloud.x * 2) * 1.5;
-  ctx.beginPath();
-  ctx.arc(cx - 5 + drift, cy + 2, 5.5, 0, Math.PI * 2);
-  ctx.arc(cx + 4 + drift, cy + 1, 6, 0, Math.PI * 2);
-  ctx.arc(cx + drift, cy - 3, 5.5, 0, Math.PI * 2);
-  ctx.fill();
+  const sprite = getSvgSpriteImage(`cloud:${cloud.type}`, () => cloudIconSvg(cloud.type, 64));
+  if (sprite) {
+    ctx.globalAlpha = 0.86;
+    const sz = tile * 0.92 * pulse;
+    ctx.drawImage(sprite, cx - sz / 2 + drift, cy - sz / 2, sz, sz);
+  } else {
+    ctx.fillStyle = `${cloud.color}55`;
+    ctx.beginPath();
+    ctx.arc(cx - 5 + drift, cy + 2, 5.5, 0, Math.PI * 2);
+    ctx.arc(cx + 4 + drift, cy + 1, 6, 0, Math.PI * 2);
+    ctx.arc(cx + drift, cy - 3, 5.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
   ctx.restore();
 }
 
@@ -161,38 +191,46 @@ export function drawCanvasShrine(ctx, shrine, tile, time) {
   const cx = shrine.x * tile + tile / 2;
   const cy = shrine.y * tile + tile / 2;
   const active = shrine.uses > 0;
-  const col = active ? (SHRINE_COLORS[shrine.type] || '#7bd0ff') : '#4b5a52';
-  const bob = active ? Math.sin(time * 0.004) * 1.6 : 0;
+  const sType = shrine.type || 'transmutation';
+  const col = active ? (SHRINE_COLORS[sType] || '#7bd0ff') : '#4b5a52';
+  const bob = active ? Math.sin(time * 0.004) * 1.4 : 0;
 
   ctx.save();
   if (active) {
-    const glow = ctx.createRadialGradient(cx, cy, 2, cx, cy, tile * 0.58);
+    const glow = ctx.createRadialGradient(cx, cy, 2, cx, cy, tile * 0.6);
     glow.addColorStop(0, `${col}55`);
     glow.addColorStop(1, `${col}00`);
     ctx.fillStyle = glow;
     ctx.beginPath();
-    ctx.arc(cx, cy, tile * 0.58, 0, Math.PI * 2);
+    ctx.arc(cx, cy, tile * 0.6, 0, Math.PI * 2);
     ctx.fill();
   }
-  ctx.fillStyle = '#25312b';
-  ctx.strokeStyle = active ? '#e5c27b' : '#3d4c44';
-  ctx.lineWidth = 1.4;
-  ctx.beginPath();
-  ctx.roundRect(cx - 9, cy + 4, 18, 7, 2);
-  ctx.fill();
-  ctx.stroke();
+  const sprite = getSvgSpriteImage(`shrine:${sType}`, () => shrineIconSvg(sType, 64));
+  if (sprite) {
+    if (!active) ctx.globalAlpha = 0.42;
+    const sz = tile * 0.96;
+    ctx.drawImage(sprite, cx - sz / 2, cy - sz / 2 + bob * 0.6, sz, sz);
+  } else {
+    ctx.fillStyle = '#25312b';
+    ctx.strokeStyle = active ? '#e5c27b' : '#3d4c44';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.roundRect(cx - 9, cy + 4, 18, 7, 2);
+    ctx.fill();
+    ctx.stroke();
 
-  ctx.fillStyle = col;
-  ctx.beginPath();
-  ctx.moveTo(cx, cy - 11 + bob);
-  ctx.lineTo(cx + 7, cy - 2 + bob);
-  ctx.lineTo(cx, cy + 4 + bob);
-  ctx.lineTo(cx - 7, cy - 2 + bob);
-  ctx.closePath();
-  ctx.fill();
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 1;
-  ctx.stroke();
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - 11 + bob);
+    ctx.lineTo(cx + 7, cy - 2 + bob);
+    ctx.lineTo(cx, cy + 4 + bob);
+    ctx.lineTo(cx - 7, cy - 2 + bob);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
   ctx.restore();
 }
 
@@ -208,6 +246,23 @@ export function drawCanvasItem(ctx, item, tile, time) {
   ctx.beginPath();
   ctx.ellipse(cx, cy + 10, 7, 3, 0, 0, Math.PI * 2);
   ctx.fill();
+
+  const spriteKey = item.type === 'component' && item.name ? `comp:${item.name}`
+    : item.type === 'component' && item.material ? `pickup:${item.material}`
+    : item.type === 'companion' && item.name ? `unit:${item.name}`
+    : `pickup:${item.type}`;
+  const sprite = getSvgSpriteImage(spriteKey, () => {
+    if (item.type === 'component' && item.name) return componentIconSvg(componentByName.get(item.name) || { name: item.name }, 64);
+    if (item.type === 'component' && item.material) return pickupIconSvg(item.material, 64);
+    if (item.type === 'companion' && item.name) return unitIconSvg(units.get(item.name) || { name: item.name, is_companion: true }, 64);
+    return pickupIconSvg(item.type, 64);
+  });
+  if (sprite) {
+    const sz = tile * 0.88;
+    ctx.drawImage(sprite, cx - sz / 2, cy - sz / 2 + bob, sz, sz);
+    ctx.restore();
+    return;
+  }
 
   if (PROP_COLORS[item.type]) {
     ctx.translate(cx, cy + bob);
@@ -367,11 +422,20 @@ export function drawCanvasAlly(ctx, ally, tile, time) {
   const col = ally.color || '#4ade80';
 
   ctx.save();
-  ctx.strokeStyle = 'rgba(74, 222, 128, 0.7)';
-  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = 'rgba(74, 222, 128, 0.78)';
+  ctx.lineWidth = 1.6;
   ctx.beginPath();
-  ctx.ellipse(cx, cy + 10, 9.5, 3.8, 0, 0, Math.PI * 2);
+  ctx.ellipse(cx, cy + 10.5, 10, 3.8, 0, 0, Math.PI * 2);
   ctx.stroke();
+
+  const allyDef = units.get(ally.species || ally.name) || { name: ally.name || 'Ally', tags: ally.tags || ['Living'], is_companion: true };
+  const sprite = getSvgSpriteImage(`unit:${allyDef.name}`, () => unitIconSvg(allyDef, 64));
+  if (sprite) {
+    const sz = tile * 0.96;
+    ctx.drawImage(sprite, cx - sz / 2, cy - sz / 2 + bob - 1, sz, sz);
+    ctx.restore();
+    return;
+  }
 
   ctx.fillStyle = `${col}cc`;
   ctx.strokeStyle = '#ecfdf5';
@@ -402,8 +466,32 @@ export function drawCanvasEnemy(ctx, enemy, tile, time) {
   ctx.save();
   ctx.fillStyle = 'rgba(0,0,0,0.48)';
   ctx.beginPath();
-  ctx.ellipse(cx, cy + 11.5, enemy.boss ? 11 : 8, 3.5, 0, 0, Math.PI * 2);
+  ctx.ellipse(cx, cy + 11.5, enemy.boss ? 11.5 : 8.5, 3.6, 0, 0, Math.PI * 2);
   ctx.fill();
+
+  if (enemy.isFinalBoss || enemy.boss) {
+    const glow = ctx.createRadialGradient(cx, cy, 3, cx, cy, tile * 0.68);
+    glow.addColorStop(0, enemy.isFinalBoss ? 'rgba(248, 113, 113, 0.5)' : 'rgba(255, 223, 159, 0.35)');
+    glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(cx, cy, tile * 0.68, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  const spriteKey = enemy.isSpawner ? 'world:lair' : `unit:${enemy.species || (enemy.isFinalBoss ? 'Mordred' : enemy.name || enemy.type)}`;
+  const sprite = getSvgSpriteImage(spriteKey, () => {
+    if (enemy.isSpawner) return entityIconSvg('lair', 64);
+    const def = units.get(enemy.species) || (enemy.isFinalBoss ? units.get('Mordred') : null) || enemy;
+    return unitIconSvg(def, 64);
+  });
+  if (sprite) {
+    const scale = enemy.isFinalBoss ? 1.12 : enemy.boss ? 1.06 : 0.96;
+    const sz = tile * scale;
+    ctx.drawImage(sprite, cx - sz / 2, cy - sz / 2 + bob - 1, sz, sz);
+    ctx.restore();
+    return;
+  }
 
   if (enemy.isSpawner) {
     const pulse = 1 + 0.08 * Math.sin(time * 0.006 + enemy.id);

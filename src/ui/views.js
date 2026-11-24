@@ -13,7 +13,11 @@ import {
   equipment, equipmentByName, equipmentSlots, getEquipmentModifiers, getUnitResistance,
   knownSpellIds, spellById, spells, tags, transmutationChoices,
 } from '../rules/core.js';
-import { entityIconSvg, shrineIconSvg, slotIconSvg, tagIconSvg, uiIconSvg, wizardPortraitSvg } from './svg-icons.js';
+import {
+  cloudIconSvg, componentIconSvg, entityIconSvg, equipmentIconSvg,
+  pickupIconSvg, shrineIconSvg, slotIconSvg, spellIconSvg, tagIconSvg,
+  uiIconSvg, unitIconSvg, wizardPortraitSvg,
+} from './svg-icons.js';
 import { totalWikiEntries } from './wiki.js';
 import { $, cleanCatalogDesc, escapeHtml, h } from './dom.js';
 
@@ -113,10 +117,12 @@ export function renderInspection(state, p) {
       : enemy.statuses.freeze || enemy.statuses.stun || enemy.statuses.petrify ? t('inspection.frozen')
       : distance(enemy, game.player) <= enemy.range && hasSight(game, enemy, game.player) ? t('inspection.attack') : t('inspection.approach');
     const title = enemy.isSpawner ? t('inspection.spawner') : enemy.species || (enemy.isFinalBoss ? 'Mordred' : enemyName(enemy));
-    const iconKey = enemy.isSpawner ? 'lair' : enemy.isFinalBoss ? 'mordred' : enemy.boss ? 'boss' : ['imp', 'knight', 'eye', 'moth'][enemy.type];
-    panel.innerHTML = `<div class="inspect-head"><div class="inspect-symbol">${entityIconSvg(iconKey, 34)}</div><div><h3>${escapeHtml(title)}${enemy.shields ? ` <span class="cyan-val">[${enemy.shields} SH]</span>` : ''}</h3><p style="margin:2px 0 0;color:var(--gold)">${escapeHtml(nextAction)}</p></div></div><p>${h('inspection.enemyStats', enemy)}</p>${renderResistances(game, enemy)}${renderStatuses(enemy)}`;
+    const unitDef = !enemy.isSpawner ? (units.get(enemy.species) || (enemy.isFinalBoss ? units.get('Mordred') : null) || enemy) : null;
+    const iconHtml = enemy.isSpawner ? entityIconSvg('lair', 36) : unitIconSvg(unitDef, 36);
+    panel.innerHTML = `<div class="inspect-head"><div class="inspect-symbol">${iconHtml}</div><div><h3>${escapeHtml(title)}${enemy.shields ? ` <span class="cyan-val">[${enemy.shields} SH]</span>` : ''}</h3><p style="margin:2px 0 0;color:var(--gold)">${escapeHtml(nextAction)}</p></div></div><p>${h('inspection.enemyStats', enemy)}</p>${renderResistances(game, enemy)}${renderStatuses(enemy)}`;
   } else if (ally) {
-    panel.innerHTML = `<div class="inspect-head"><div class="inspect-symbol">${entityIconSvg('ally', 34)}</div><div><h3>${escapeHtml(ally.name)}</h3><p style="margin:2px 0 0;color:var(--green)">${h('inspection.ally')}</p></div></div><p>HP ${ally.hp}/${ally.maxHp} · DMG ${ally.damage} · R${ally.range}${ally.shields ? ` · ${ally.shields} SH` : ''}${ally.duration ? ` · ${ally.duration}t` : ''}</p>${renderResistances(game, ally)}`;
+    const allyDef = units.get(ally.species || ally.name) || { ...ally, is_companion: true };
+    panel.innerHTML = `<div class="inspect-head"><div class="inspect-symbol">${unitIconSvg(allyDef, 36)}</div><div><h3>${escapeHtml(ally.name)}</h3><p style="margin:2px 0 0;color:var(--green)">${h('inspection.ally')}</p></div></div><p>HP ${ally.hp}/${ally.maxHp} · DMG ${ally.damage} · R${ally.range}${ally.shields ? ` · ${ally.shields} SH` : ''}${ally.duration ? ` · ${ally.duration}t` : ''}</p>${renderResistances(game, ally)}`;
   } else if (p && game.portals.some(r => distance(r, p) === 0)) {
     const portal = game.portals.find(r => distance(r, p) === 0);
     const next = getPortalPreview(game, portal);
@@ -128,30 +134,33 @@ export function renderInspection(state, p) {
       h('inspection.shrines', { shrines: t(`shrine.${next.shrine}`) }),
       next.components?.length ? `${h('wiki.filter.itemComponent')}: ${next.components.map(componentName).join(', ')}` : '',
     ].filter(Boolean).join('<br>') : h('inspection.finalPortal');
-    panel.innerHTML = `<div class="inspect-head"><div class="inspect-symbol">${entityIconSvg(portal.theme ? 'portal-ember' : 'portal-moss', 34)}</div><div><h3>${h(portal.theme ? 'inspection.emberfallRift' : 'inspection.mossboundRift')}</h3><p style="margin:2px 0 0">${h(game.enemies.length ? 'inspection.portalLocked' : 'inspection.portalOpen')}</p></div></div><p>${preview}</p>`;
+    panel.innerHTML = `<div class="inspect-head"><div class="inspect-symbol">${entityIconSvg(portal.theme ? 'portal-ember' : 'portal-moss', 36)}</div><div><h3>${h(portal.theme ? 'inspection.emberfallRift' : 'inspection.mossboundRift')}</h3><p style="margin:2px 0 0">${h(game.enemies.length ? 'inspection.portalLocked' : 'inspection.portalOpen')}</p></div></div><p>${preview}</p>`;
   } else if (p && game.shrine && distance(game.shrine, p) === 0) {
     const sType = game.shrine.type || 'transmutation';
-    panel.innerHTML = `<div class="inspect-head"><div class="inspect-symbol">${shrineIconSvg(sType, 32)}</div><div><h3>${h(`shrine.${sType}`)}</h3></div></div><p>${sType === 'transmutation' ? h('inspection.shrineDescription', { uses: game.shrine.uses }) : h(`shrine.${sType}Desc`)}</p>`;
+    panel.innerHTML = `<div class="inspect-head"><div class="inspect-symbol">${shrineIconSvg(sType, 36)}</div><div><h3>${h(`shrine.${sType}`)}</h3></div></div><p>${sType === 'transmutation' ? h('inspection.shrineDescription', { uses: game.shrine.uses }) : h(`shrine.${sType}Desc`)}</p>`;
   } else if (p && game.items.some(i => distance(i, p) === 0)) {
     const item = game.items.find(i => distance(i, p) === 0);
     const comp = item.type === 'component' && item.name ? componentByName.get(item.name) : null;
-    const iconKey = item.type === 'potion' ? 'potion' : item.type === 'shard' ? 'shard' : 'component';
+    const itemIconHtml = item.type === 'component' && comp ? componentIconSvg(comp, 36)
+      : item.type === 'component' && item.material ? pickupIconSvg(item.material, 36)
+      : item.type === 'companion' ? unitIconSvg(units.get(item.name) || { name: item.name, is_companion: true }, 36)
+      : pickupIconSvg(item.type, 36);
     const description = item.type === 'companion' ? t('item.companion', { name: item.name })
       : item.type === 'tome' ? t('item.tome', { spell: spellById.get(Number(String(item.spellId).replace(/^spell-/, '')))?.name })
       : (item.type === 'scroll' || item.type === 'chest') ? item.options.map(c => item.type === 'scroll' ? spellById.get(c).name : equipmentName(c)).join(' · ')
       : item.type === 'component' && item.name ? `${componentName(item.name)}${comp?.desc ? ` — ${cleanCatalogDesc(comp.desc)}` : ''}`
       : item.type === 'component' ? t('inspection.material', { material: t(`materials.${item.material}`) })
       : t(item.type === 'shard' ? 'inspection.shard' : 'inspection.potion');
-    panel.innerHTML = `<div class="inspect-head"><div class="inspect-symbol">${entityIconSvg(iconKey, 34)}</div><div><h3>${escapeHtml(item.type === 'component' && item.name ? componentName(item.name) : t('pickup.' + item.type))}</h3></div></div><p>${escapeHtml(description)}</p>`;
+    panel.innerHTML = `<div class="inspect-head"><div class="inspect-symbol">${itemIconHtml}</div><div><h3>${escapeHtml(item.type === 'component' && item.name ? componentName(item.name) : t('pickup.' + item.type))}</h3></div></div><p>${escapeHtml(description)}</p>`;
   } else if (p && distance(game.player, p) === 0) {
-    panel.innerHTML = `<div class="inspect-head"><div class="inspect-symbol" style="overflow:hidden;padding:0">${wizardPortraitSvg()}</div><div><h3>${h('inspection.player')}</h3><p style="margin:2px 0 0"><span class="cyan-val">${game.player.shields || 0} SH</span></p></div></div><p>${h('inspection.playerHealth', { hp: game.player.hp, maxHp: maxHealth(game), ward: game.player.shield })}<br>${h('inspection.playerResources', { points: game.points, potions: game.potions })}</p>${renderResistances(game, game.player)}`;
+    panel.innerHTML = `<div class="inspect-head"><div class="inspect-symbol" style="overflow:hidden;padding:0">${wizardPortraitSvg(game.player.outfit || 'Wizard')}</div><div><h3>${h('inspection.player')}</h3><p style="margin:2px 0 0"><span class="cyan-val">${game.player.shields || 0} SH</span></p></div></div><p>${h('inspection.playerHealth', { hp: game.player.hp, maxHp: maxHealth(game), ward: game.player.shield })}<br>${h('inspection.playerResources', { points: game.points, potions: game.potions })}</p>${renderResistances(game, game.player)}`;
   } else if (cloud) {
     const def = CLOUD_TYPES[cloud.type] || CLOUD_TYPES.fire;
-    panel.innerHTML = `<div class="inspect-head"><div class="inspect-symbol">${entityIconSvg('cloud', 34)}</div><div><h3>${escapeHtml(def.name)}</h3></div></div><p>${h('inspection.cloud')} · ${cloud.duration}t${cloud.damage ? ` · ${cloud.damage} ${cloud.damageType}` : ''}</p>`;
+    panel.innerHTML = `<div class="inspect-head"><div class="inspect-symbol">${cloudIconSvg(cloud.type, 36)}</div><div><h3>${escapeHtml(def.name)}</h3></div></div><p>${h('inspection.cloud')} · ${cloud.duration}t${cloud.damage ? ` · ${cloud.damage} ${cloud.damageType}` : ''}</p>`;
   } else if (p && game.tiles[p.y]?.[p.x] === 2) {
-    panel.innerHTML = `<div class="inspect-head"><div class="inspect-symbol">${entityIconSvg('chasm', 34)}</div><div><h3>${h('inspection.chasm')}</h3></div></div><p>${h('inspection.chasmDesc')}</p>`;
+    panel.innerHTML = `<div class="inspect-head"><div class="inspect-symbol">${entityIconSvg('chasm', 36)}</div><div><h3>${h('inspection.chasm')}</h3></div></div><p>${h('inspection.chasmDesc')}</p>`;
   } else {
-    panel.innerHTML = `<div class="inspect-head"><div class="inspect-symbol">${entityIconSvg('empty', 30)}</div><div><h3>${h('inspection.emptyTitle')}</h3></div></div><p>${h('inspection.emptyDescription')}</p>`;
+    panel.innerHTML = `<div class="inspect-head"><div class="inspect-symbol">${entityIconSvg('empty', 34)}</div><div><h3>${h('inspection.emptyTitle')}</h3></div></div><p>${h('inspection.emptyDescription')}</p>`;
   }
 }
 
@@ -178,7 +187,7 @@ export function renderForgeSidebar(state) {
   const shrine = game.shrine;
   const near = shrine && distance(game.player, shrine) <= 1;
   const sType = shrine?.type || 'transmutation';
-  if ($('shrine-icon-slot')) $('shrine-icon-slot').innerHTML = shrineIconSvg(sType, 22);
+  if ($('shrine-icon-slot')) $('shrine-icon-slot').innerHTML = shrineIconSvg(sType, 26);
   $('shrine-title').textContent = t(`shrine.${sType}`);
   $('shrine-state').textContent = shrine ? t('forge.shrineState', { uses: shrine.uses, reach: t(near ? 'forge.near' : 'forge.far') }) : t('forge.noShrine');
   $('shrine-special-desc').textContent = sType === 'transmutation' ? t('inspection.shrineDescription', { uses: shrine?.uses ?? 0 }) : t(`shrine.${sType}Desc`);
@@ -224,12 +233,22 @@ export function renderHud(state, { onRender, onSaveProfile }) {
     onSaveProfile();
   }
   game.player.outfit = profile.selected;
+  const portraitEl = $('wizard-portrait');
+  if (portraitEl && portraitEl.dataset.outfit !== (profile.selected || 'Wizard')) {
+    portraitEl.dataset.outfit = profile.selected || 'Wizard';
+    portraitEl.innerHTML = wizardPortraitSvg(profile.selected || 'Wizard');
+  }
 
   const reward = game.pendingReward;
   if (reward && game.status === 'playing') {
     $('reward-options').replaceChildren(...reward.options.map(choice => {
       const button = document.createElement('button');
-      button.textContent = reward.type === 'scroll' ? spellById.get(choice).name : equipmentName(choice);
+      button.className = 'reward-option-btn';
+      const isScroll = reward.type === 'scroll';
+      const itemDef = isScroll ? spellById.get(choice) : equipmentByName.get(choice);
+      const iconHtml = isScroll ? spellIconSvg(itemDef, 26) : equipmentIconSvg(itemDef, 26);
+      const label = isScroll ? (itemDef?.name || String(choice)) : equipmentName(choice);
+      button.innerHTML = `${iconHtml}<span>${escapeHtml(label)}</span>`;
       button.onclick = () => { if (claimReward(game, choice)) { $('reward-dialog').close(); onRender(); } };
       return button;
     }));
@@ -275,14 +294,13 @@ export function renderHud(state, { onRender, onSaveProfile }) {
 
   $('spell-count').textContent = String(knownSpells.length).padStart(2, '0');
   $('spell-list').innerHTML = knownSpells.map((s, i) => {
-    const primaryTag = s.tags?.[0] || 'Arcane';
     const charges = game.charges[s.id] ?? 0;
     const canUse = game.status === 'playing' && (s.maxCharges === 0 || charges > 0) && (!s.hpCost || game.player.hp > s.hpCost);
     const meta = `${s.damage ? `${s.damage} DMG` : s.behavior.toUpperCase()} · R${s.range}${s.radius ? ` · A${s.radius}` : ''}${s.hpCost ? ` · -${s.hpCost}HP` : ''}${s.quickCast ? ' · ⚡QC' : ''}`;
     const chargeText = s.maxCharges === 0 ? '∞' : `${charges}/${s.maxCharges}`;
     const tooltip = cleanCatalogDesc(s.desc);
     return `<button class="spell ${state.selected === s.id ? 'selected' : ''}" data-spell="${s.id}" data-tooltip="${escapeHtml(tooltip)}" aria-pressed="${state.selected === s.id}" ${canUse ? '' : 'disabled'}>
-      <span class="spell-icon" style="border-color:${s.color}55">${tagIconSvg(primaryTag, 22)}</span>
+      <span class="spell-icon" style="border-color:${s.color}55">${spellIconSvg(s, 26)}</span>
       <span class="spell-text"><strong>${escapeHtml(s.name)}</strong><small>${escapeHtml(meta)}</small></span>
       <span class="spell-meta-right">${chargeText}${i < 9 ? `<br><span class="spell-hotkey">${i + 1}</span>` : ''}</span>
     </button>`;
@@ -290,8 +308,11 @@ export function renderHud(state, { onRender, onSaveProfile }) {
 
   $('allies-badge').textContent = (game.allies || []).length ? `${t('player.allies')}: ${game.allies.length}` : '';
   $('equipped-summary').innerHTML = equipmentSlots.map(slot => {
+    const worn = Object.values(game.equipment).find(e => equipmentByName.get(e.name)?.slot === slot);
+    const wornDef = worn ? equipmentByName.get(worn.name) : null;
     const item = equippedLabel(game, slot);
-    return `<div class="eq-slot-row"><span class="eq-slot-label">${slotIconSvg(slot, 15)}<span>${h(`slots.${slot.toLowerCase()}`)}</span></span><strong>${item ? escapeHtml(item) : '—'}</strong></div>`;
+    const iconHtml = wornDef ? equipmentIconSvg(wornDef, 18) : slotIconSvg(slot, 15);
+    return `<div class="eq-slot-row"><span class="eq-slot-label">${iconHtml}<span>${h(`slots.${slot.toLowerCase()}`)}</span></span><strong>${item ? escapeHtml(item) : '—'}</strong></div>`;
   }).join('');
 
   const turns = [...new Set(game.log.map(entry => entry.turn))];
@@ -363,7 +384,7 @@ export function renderGrimoire(state) {
     return `<div class="catalog-card ${isLearned ? 'learned-card' : ''}">
       <div class="catalog-card-head">
         <div class="catalog-card-title-group">
-          <span class="card-emblem" style="border-color:${primaryColor}55">${tagIconSvg(primaryTag, 22)}</span>
+          <span class="card-emblem" style="border-color:${primaryColor}55">${spellIconSvg(s, 30)}</span>
           <h3>${escapeHtml(s.name)}</h3>
         </div>
         <span class="catalog-badge">${isLearned ? h('compendium.learnedBadge') : `LVL ${s.level} · ${s.level} SP`}</span>
@@ -402,7 +423,7 @@ export function showSpellDetail(state, spellId, onRender) {
   $('detail-content').innerHTML = `
     <div class="eyebrow">${h('nav.grimoire')} · LVL ${base.level}</div>
     <div class="catalog-card-title-group" style="margin:8px 0 12px">
-      <span class="card-emblem">${tagIconSvg(primaryTag, 24)}</span>
+      <span class="card-emblem">${spellIconSvg(base, 32)}</span>
       <h2 style="margin:0">${escapeHtml(base.name)}</h2>
     </div>
     <div class="chip-wrap">${tagPills}</div>
@@ -438,15 +459,17 @@ export function renderForgeView(state) {
   $('satchel-chips').innerHTML = game.components.length
     ? game.components.map(name => {
       const comp = componentByName.get(name);
-      return `<span class="tag-pill" title="${escapeHtml(cleanCatalogDesc(comp?.desc || ''))}">${entityIconSvg('component', 13)}<span>${escapeHtml(componentName(name))}</span> <small style="opacity:.7">(${(comp?.tags || []).join('/')})</small></span>`;
+      return `<span class="tag-pill" title="${escapeHtml(cleanCatalogDesc(comp?.desc || ''))}">${componentIconSvg(comp, 16)}<span>${escapeHtml(componentName(name))}</span> <small style="opacity:.7">(${(comp?.tags || []).join('/')})</small></span>`;
     }).join('')
     : `<span class="muted">${h('forge.empty')}</span>`;
 
   if ($('forge-equipped-strip')) {
     $('forge-equipped-strip').innerHTML = equipmentSlots.map(slot => {
+      const worn = Object.values(game.equipment).find(e => equipmentByName.get(e.name)?.slot === slot);
+      const wornDef = worn ? equipmentByName.get(worn.name) : null;
       const item = equippedLabel(game, slot);
       return `<div class="loadout-slot-card ${item ? 'equipped' : ''}">
-        ${slotIconSvg(slot, 22)}
+        ${wornDef ? equipmentIconSvg(wornDef, 26) : slotIconSvg(slot, 22)}
         <div>
           <span>${h(`slots.${slot.toLowerCase()}`)}</span>
           <strong>${item ? escapeHtml(item) : '—'}</strong>
@@ -475,7 +498,7 @@ export function renderForgeView(state) {
     return `<div class="catalog-card ${canMake ? 'craftable-card' : ''} ${isEquipped ? 'learned-card' : ''}">
       <div class="catalog-card-head">
         <div class="catalog-card-title-group">
-          <span class="card-emblem">${slotIconSvg(item.slot, 22)}</span>
+          <span class="card-emblem">${equipmentIconSvg(item, 30)}</span>
           <h3>${escapeHtml(equipmentName(item.name))}</h3>
         </div>
         <span class="catalog-badge">${h(`slots.${item.slot.toLowerCase()}`)}</span>
@@ -493,7 +516,7 @@ export function renderForgeView(state) {
 export function showUnit(state) {
   const unit = units.get($('unit-select').value);
   $('unit-detail').innerHTML = unit
-    ? `<h3>${escapeHtml(unit.name)}</h3><p>${unit.hp} HP · ${unit.shields} SH · ${escapeHtml(unit.tags.join(' / '))}</p>${renderResistances(state.game, { resistances: unit.resists })}<dl>${unit.abilities.map(a => `<dt>${escapeHtml(a.name)}</dt><dd>${escapeHtml([a.damage ? a.damage + ' ' + a.damage_type.join('/') : '', a.range ? 'R' + a.range : '', cleanCatalogDesc(a.desc)].filter(Boolean).join(' · '))}</dd>`).join('')}</dl>${unit.passives.map(p => `<p>${escapeHtml(cleanCatalogDesc(p))}</p>`).join('')}`
+    ? `<div class="inspect-head"><div class="inspect-symbol">${unitIconSvg(unit, 38)}</div><div><h3>${escapeHtml(unit.name)}</h3><p style="margin:2px 0 0">${unit.hp} HP · ${unit.shields} SH · ${escapeHtml(unit.tags.join(' / '))}</p></div></div>${renderResistances(state.game, { resistances: unit.resists })}<dl>${unit.abilities.map(a => `<dt>${escapeHtml(a.name)}</dt><dd>${escapeHtml([a.damage ? a.damage + ' ' + a.damage_type.join('/') : '', a.range ? 'R' + a.range : '', cleanCatalogDesc(a.desc)].filter(Boolean).join(' · '))}</dd>`).join('')}</dl>${unit.passives.map(p => `<p>${escapeHtml(cleanCatalogDesc(p))}</p>`).join('')}`
     : h('bestiary.empty');
 }
 

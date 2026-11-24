@@ -2,6 +2,7 @@ import { SIZE } from '../data/constants.js';
 import { pick, unitStats, units } from '../data/bestiary.js';
 import { effectiveSpell, getEquipmentModifiers, spellByName } from '../rules/core.js';
 import { resolveSpellEffect } from '../rules/spell-effects.js';
+import { spellNameKey, textRef } from '../i18n/text-keys.js';
 import { areaCells, canStand, covers, distance, findOpenTileNear, hasSight, isPassable, isTileOccupied, onSegment, random } from './grid.js';
 import { addCloud, availableSpells, equipped, log, maxHealth, withActionContext } from './context.js';
 import { applyStatus, cleanup, damageAlly, damageEnemy, damagePlayer, retaliateBodyElectric } from './combat.js';
@@ -494,7 +495,7 @@ export function cast(game, spellId, target) {
   }
 
   game.effects.push({ ...effectiveTarget, color: spell.color });
-  log(game, hits === 1 ? 'log.cast.one' : 'log.cast.other', { spell: spell.name, count: hits });
+  log(game, hits === 1 ? 'log.cast.one' : 'log.cast.other', { spell: textRef(spellNameKey(spell.spellId)), count: hits });
   cleanup(game);
   if (!spell.quickCast) endTurn(game);
   return true;

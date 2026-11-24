@@ -1,4 +1,5 @@
 import { getLocale, localeOptions, setLocale, t, translatePage } from './i18n/i18n.js';
+import { grimoireSpellName } from './i18n/game-text.js';
 import { availableSpells, createGame, restore, serialize } from './engine/index.js';
 import { $, PROFILE_KEY, SAVE_KEY, loadProfile, loadStorageItem, saveStorageItem } from './ui/dom.js';
 import { createBoardRenderer } from './ui/board-renderer.js';
@@ -41,7 +42,7 @@ function updateHint(key) {
   const spell = availableSpells(state.game).find(s => s.id === state.selected);
   $('target-hint').textContent = state.game.deploying
     ? t('realm.deploy')
-    : key ? t(key) : spell ? t('hint.target', { spell: spell.name }) : t('hint.move');
+    : key ? t(key) : spell ? t('hint.target', { spell: grimoireSpellName(spell) }) : t('hint.move');
 }
 
 function render() {
@@ -94,6 +95,7 @@ language.value = getLocale();
 language.onchange = () => setLocale(language.value);
 
 document.addEventListener('localechange', () => {
+  initStaticIcons();
   populateFilters();
   if ($('bestiary-dialog').open) renderBestiary(state);
   if ($('guide-dialog').open) showWardrobe(state);
