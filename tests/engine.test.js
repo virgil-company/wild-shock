@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createGame, generateRealm, move, cast, wait, drink, learnRw3Spell, learnRw3Upgrade, restore, serialize, availableSpells, maxHealth, FINAL_REALM, SIZE, hasSight, shortestPath } from '../src/engine/index.js';
+import { createGame, generateRealm, move, cast, wait, drink, learnSpell, learnUpgrade, restore, serialize, availableSpells, maxHealth, FINAL_REALM, SIZE, hasSight, shortestPath } from '../src/engine/index.js';
 
 function arena() {
   const game = createGame(42);
@@ -10,12 +10,12 @@ function arena() {
 }
 function enemy(x, y, extra = {}) { return { id: 1, x, y, name: 'Test enemy', hp: 30, maxHp: 30, damage: 3, range: 1, school: 5, type: 0, shields: 0, resistances: {}, statuses: {}, ...extra }; }
 
-test('only RW3 spells are available in the grimoire (old Skill Atlas removed)', () => {
+test('only grimoire spells are available in the grimoire (old Skill Atlas removed)', () => {
   const game = arena();
   const spells = availableSpells(game);
   assert.equal(spells.length, 3);
-  assert.ok(spells.every(s => s.isRw3));
-  assert.deepEqual(spells.map(s => s.id), ['rw3-101', 'rw3-61', 'rw3-95']);
+  assert.ok(spells.every(s => Number.isInteger(s.spellId)));
+  assert.deepEqual(spells.map(s => s.id), ['spell-101', 'spell-61', 'spell-95']);
 });
 
 test('seed 666 uses the standard grimoire even when restoring an old development save', () => {
@@ -50,22 +50,22 @@ test('world generation is deterministic and all pickups, enemies and rifts reach
 test('invalid actions do not consume turns or resources', () => {
   const game = arena(); game.tiles[11][4] = 1;
   assert.equal(move(game, 1, 0), false); assert.equal(move(game, 1, 1), false);
-  assert.equal(cast(game, 'rw3-101', { x: 4, y: 11 }), false); assert.equal(cast(game, 'rw3-101', { x: 20, y: 11 }), false);
-  assert.equal(game.turn, 0); assert.equal(game.charges['rw3-101'], 20);
+  assert.equal(cast(game, 'spell-101', { x: 4, y: 11 }), false); assert.equal(cast(game, 'spell-101', { x: 20, y: 11 }), false);
+  assert.equal(game.turn, 0); assert.equal(game.charges['spell-101'], 20);
 });
 
-test('learning RW3 spells and upgrades enforces SP cost without consuming a turn', () => {
+test('learning spells and upgrades enforces SP cost without consuming a turn', () => {
   const game = arena();
-  assert.ok(learnRw3Spell(game, 67)); // Freeze (level 2)
+  assert.ok(learnSpell(game, 67)); // Freeze (level 2)
   assert.equal(game.points, 10);
-  assert.ok(learnRw3Upgrade(game, 67, 338)); // Quickcast (level 2)
+  assert.ok(learnUpgrade(game, 67, 338)); // Quickcast (level 2)
   assert.equal(game.points, 8);
-  assert.equal(learnRw3Spell(game, 67), false); // Already learned
+  assert.equal(learnSpell(game, 67), false); // Already learned
   assert.equal(game.turn, 0);
 });
 
 test('line of sight blocks casting through walls', () => {
-  const game = arena(); game.tiles[11][5] = 1; assert.equal(hasSight(game, game.player, { x: 7, y: 11 }), false); assert.equal(cast(game, 'rw3-101', { x: 7, y: 11 }), false);
+  const game = arena(); game.tiles[11][5] = 1; assert.equal(hasSight(game, game.player, { x: 7, y: 11 }), false); assert.equal(cast(game, 'spell-101', { x: 7, y: 11 }), false);
 });
 
 test('shortestPath finds the minimum cardinal route around walls', () => {
@@ -79,8 +79,8 @@ test('shortestPath finds the minimum cardinal route around walls', () => {
 
 test('casting consumes charges, harms enemies and advances their turn', () => {
   const game = arena(); game.enemies = [enemy(6, 11)];
-  assert.ok(cast(game, 'rw3-101', { x: 6, y: 11 }));
-  assert.equal(game.charges['rw3-101'], 19);
+  assert.ok(cast(game, 'spell-101', { x: 6, y: 11 }));
+  assert.equal(game.charges['spell-101'], 19);
   assert.equal(game.enemies[0].hp, 19);
   assert.equal(game.turn, 1);
   assert.equal(game.enemies[0].x, 5);
@@ -90,21 +90,21 @@ test('casting consumes charges, harms enemies and advances their turn', () => {
 
 test('Fireball hits multiple enemies and Freeze prevents retaliation', () => {
   const game = arena(); game.enemies = [enemy(6, 11), enemy(7, 12, { id: 2 })];
-  cast(game, 'rw3-61', { x: 6, y: 11 });
+  cast(game, 'spell-61', { x: 6, y: 11 });
   assert.ok(game.enemies.every(e => e.hp < 30));
 
-  assert.ok(learnRw3Spell(game, 67));
+  assert.ok(learnSpell(game, 67));
   game.enemies = [enemy(4, 11)]; const hp = game.player.hp;
-  cast(game, 'rw3-67', { x: 4, y: 11 });
+  cast(game, 'spell-67', { x: 4, y: 11 });
   assert.equal(game.player.hp, hp);
   assert.equal(game.enemies[0].x, 4);
 });
 
 test('potions restore reserves and still allow enemy retaliation', () => {
-  const game = arena(); game.player.hp = 1; game.charges['rw3-101'] = 0; game.enemies = [enemy(4, 11)];
+  const game = arena(); game.player.hp = 1; game.charges['spell-101'] = 0; game.enemies = [enemy(4, 11)];
   drink(game);
   assert.equal(game.player.hp, maxHealth(game) - 3);
-  assert.equal(game.charges['rw3-101'], 20);
+  assert.equal(game.charges['spell-101'], 20);
   assert.equal(game.potions, 2);
   assert.equal(game.turn, 1);
   assert.equal(game.progress.potionsUsed, 1);
@@ -117,7 +117,7 @@ test('clearing rewards points once and rifts advance the campaign', () => {
 });
 
 test('progress records skill point spending and migrates older saves', () => {
-  const game = arena(); assert.ok(learnRw3Spell(game, 86)); // Icicle (level 1)
+  const game = arena(); assert.ok(learnSpell(game, 86)); // Icicle (level 1)
   assert.equal(game.progress.pointsSpent, 1);
   const oldSave = JSON.parse(serialize(game)); delete oldSave.progress;
   assert.deepEqual(restore(JSON.stringify(oldSave)).progress, { damageDealt: 0, pointsEarned: 0, pointsSpent: 0, spellsCast: 0, staffStrikes: 0, potionsUsed: 0, realmsCleared: 0 });
@@ -134,7 +134,7 @@ test('saves round-trip and malformed data is rejected', () => {
 
 test('Lightning Bolt beam hits along the aimed forward ray only', () => {
   const game = arena(); game.enemies = [enemy(5, 11), enemy(1, 11, { id: 2 }), enemy(3, 13, { id: 3 })];
-  cast(game, 'rw3-95', { x: 7, y: 11 });
+  cast(game, 'spell-95', { x: 7, y: 11 });
   assert.equal(game.enemies[0].hp, 18); assert.equal(game.enemies[1].hp, 30); assert.equal(game.enemies[2].hp, 30);
 });
 

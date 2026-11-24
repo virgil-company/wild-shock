@@ -26,12 +26,12 @@
       <button class="nav active" id="realm-tab" data-tooltip="" data-i18n-tooltip="nav.returnToTheRealmT">
         <span data-i18n="nav.theRealm"></span>
       </button>
-      <button class="nav" id="grimoire-tab" data-tooltip="" data-i18n-tooltip="nav.rw3GrimoireTooltip">
-        <span data-i18n="nav.rw3Grimoire"></span>
+      <button class="nav" id="grimoire-tab" data-tooltip="" data-i18n-tooltip="nav.grimoireTooltip">
+        <span data-i18n="nav.grimoire"></span>
         <span class="nav-badge" id="spell-total"></span>
       </button>
-      <button class="nav" id="forge-tab" data-tooltip="" data-i18n-tooltip="nav.rw3ForgeTooltip">
-        <span data-i18n="nav.rw3Forge"></span>
+      <button class="nav" id="forge-tab" data-tooltip="" data-i18n-tooltip="nav.forgeTooltip">
+        <span data-i18n="nav.forge"></span>
         <span class="nav-badge" id="equipment-total"></span>
       </button>
       <button class="nav" id="wiki-tab" data-tooltip="" data-i18n-tooltip="nav.wikiTooltip">
@@ -122,8 +122,8 @@
       <div id="status-banners" class="status-banners"></div>
 
       <div class="quick-nav-row">
-        <button class="atlas-cta" id="grimoire-cta" data-tooltip="" data-i18n-tooltip="nav.rw3GrimoireTooltip">
-          <span data-i18n="nav.rw3Grimoire"></span>
+        <button class="atlas-cta" id="grimoire-cta" data-tooltip="" data-i18n-tooltip="nav.grimoireTooltip">
+          <span data-i18n="nav.grimoire"></span>
           <span>↗</span>
         </button>
       </div>
@@ -217,13 +217,13 @@
 
       <div class="panel forge-panel">
         <div class="panel-heading">
-          <span data-i18n="nav.rw3Forge"></span>
-          <span id="rw3-catalogue" class="count-pill"></span>
+          <span data-i18n="nav.forge"></span>
+          <span id="forge-catalogue" class="count-pill"></span>
         </div>
-        <p id="rw3-inventory" class="muted"></p>
-        <p id="rw3-equipment" class="muted"></p>
+        <p id="forge-inventory" class="muted"></p>
+        <p id="forge-equipment" class="muted"></p>
         <button class="atlas-cta" id="open-forge-cta">
-          <span data-i18n="nav.rw3Forge"></span> <span>↗</span>
+          <span data-i18n="nav.forge"></span> <span>↗</span>
         </button>
         <div class="shrine-block">
           <div class="shrine-header">
@@ -253,55 +253,55 @@
     </aside>
   </section>
 
-  <!-- ==================== VIEW 2: RW3 GRIMOIRE ==================== -->
+  <!-- ==================== VIEW 2: GRIMOIRE ==================== -->
   <section id="grimoire-view" hidden>
     <div class="atlas-toolbar panel">
       <div>
-        <span class="eyebrow" data-i18n="nav.rw3Grimoire"></span>
-        <h2 data-i18n="rw3.grimoireTitle"></h2>
-        <p class="muted" data-i18n="rw3.grimoireSubtitle"></p>
+        <span class="eyebrow" data-i18n="nav.grimoire"></span>
+        <h2 data-i18n="compendium.grimoireTitle"></h2>
+        <p class="muted" data-i18n="compendium.grimoireSubtitle"></p>
       </div>
       <div class="atlas-summary">
-        <b id="rw3-learned-count">0</b>
-        <span id="rw3-grimoire-points"></span>
+        <b id="grimoire-learned-count">0</b>
+        <span id="grimoire-points"></span>
       </div>
     </div>
     <div class="atlas-controls">
-      <input type="search" id="rw3-spell-search" placeholder="" data-i18n-placeholder="rw3.searchSpells">
-      <select id="rw3-tag-filter"></select>
-      <select id="rw3-level-filter"></select>
-      <select id="rw3-status-filter">
+      <input type="search" id="spell-search" placeholder="" data-i18n-placeholder="compendium.searchSpells">
+      <select id="tag-filter"></select>
+      <select id="level-filter"></select>
+      <select id="status-filter">
         <option value="all" data-i18n="atlas.allSkills"></option>
-        <option value="learned" data-i18n="rw3.learnedOnly"></option>
-        <option value="available" data-i18n="rw3.availableOnly"></option>
+        <option value="learned" data-i18n="compendium.learnedOnly"></option>
+        <option value="available" data-i18n="compendium.availableOnly"></option>
       </select>
     </div>
-    <div id="rw3-spell-grid" class="rw3-grid"></div>
+    <div id="spell-grid" class="catalog-grid"></div>
   </section>
 
-  <!-- ==================== VIEW 3: RW3 ARCANE FORGE ==================== -->
+  <!-- ==================== VIEW 3: ARCANE FORGE ==================== -->
   <section id="forge-view" hidden>
     <div class="atlas-toolbar panel">
       <div>
-        <span class="eyebrow" data-i18n="nav.rw3Forge"></span>
-        <h2 data-i18n="rw3.forgeTitle"></h2>
-        <p class="muted" data-i18n="rw3.forgeSubtitle"></p>
+        <span class="eyebrow" data-i18n="nav.forge"></span>
+        <h2 data-i18n="compendium.forgeTitle"></h2>
+        <p class="muted" data-i18n="compendium.forgeSubtitle"></p>
       </div>
       <div class="atlas-summary">
-        <b id="rw3-craftable-count">0</b>
-        <span data-i18n="rw3.craftableOnly"></span>
+        <b id="forge-craftable-count">0</b>
+        <span data-i18n="compendium.craftableOnly"></span>
       </div>
     </div>
 
     <div class="forge-overview-grid">
-      <div class="panel rw3-satchel-panel">
+      <div class="panel satchel-panel">
         <div class="panel-heading">
-          <span id="rw3-satchel-title"></span>
+          <span id="satchel-title"></span>
           <span class="heading-sigil">✦</span>
         </div>
-        <div id="rw3-satchel-chips" class="chip-wrap"></div>
+        <div id="satchel-chips" class="chip-wrap"></div>
       </div>
-      <div class="panel rw3-loadout-panel">
+      <div class="panel loadout-panel">
         <div class="panel-heading">
           <span data-i18n="player.equippedGear"></span>
           <span class="heading-sigil">◈</span>
@@ -311,14 +311,14 @@
     </div>
 
     <div class="atlas-controls">
-      <input type="search" id="rw3-eq-search" placeholder="" data-i18n-placeholder="rw3.searchEquipment">
-      <select id="rw3-slot-filter"></select>
-      <select id="rw3-eq-status-filter">
+      <input type="search" id="eq-search" placeholder="" data-i18n-placeholder="compendium.searchEquipment">
+      <select id="slot-filter"></select>
+      <select id="eq-status-filter">
         <option value="all" data-i18n="atlas.allSkills"></option>
-        <option value="craftable" data-i18n="rw3.craftableOnly"></option>
+        <option value="craftable" data-i18n="compendium.craftableOnly"></option>
       </select>
     </div>
-    <div id="rw3-eq-grid" class="rw3-grid"></div>
+    <div id="eq-grid" class="catalog-grid"></div>
   </section>
 
   <!-- ==================== VIEW 4: ARCANE ENCYCLOPEDIA (WIKI) ==================== -->
@@ -326,7 +326,7 @@
 
   <footer>
     <span><span data-i18n="app.brand"></span> <span class="footer-dot">✦</span> <span data-i18n="footer.everyTurnIsAChoice"></span></span>
-    <span><span data-i18n="nav.rw3Grimoire"></span> (198) <span class="footer-dot">·</span> <span data-i18n="nav.rw3Forge"></span> (375)</span>
+    <span><span data-i18n="nav.grimoire"></span> (198) <span class="footer-dot">·</span> <span data-i18n="nav.forge"></span> (375)</span>
   </footer>
 </main>
 
@@ -339,7 +339,7 @@
   <button class="close-dialog" data-i18n-aria-label="common.close">×</button>
   <h2 id="ingredient-title"></h2><p id="ingredient-recipe"></p>
   <div id="ingredient-choices"></div>
-  <button id="craft-chosen" class="primary" data-i18n="rw3.forgeItem"></button>
+  <button id="craft-chosen" class="primary" data-i18n="compendium.forgeItem"></button>
 </dialog>
 <dialog id="bestiary-dialog">
   <button class="close-dialog" data-i18n-aria-label="common.close">×</button>
@@ -380,7 +380,7 @@
     <span data-i18n="journey.modeLabel"></span>
     <select id="new-mode">
       <option value="standard" data-i18n="mode.standard"></option>
-      <option value="rw3" data-i18n="mode.rw3"></option>
+      <option value="classic" data-i18n="mode.classic"></option>
       <option value="trial-pyromancer" data-i18n="mode.trial-pyromancer"></option>
       <option value="trial-necromancer" data-i18n="mode.trial-necromancer"></option>
       <option value="trial-stormcaller" data-i18n="mode.trial-stormcaller"></option>

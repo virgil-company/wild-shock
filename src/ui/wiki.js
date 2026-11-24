@@ -1,16 +1,16 @@
-import { rw3Components, rw3Equipment, rw3Spells, rw3Tags, rw3Units, wardrobe } from '../data/rw3-catalog.js';
+import { components, equipment, spells, tags, units as unitCatalog, wardrobe } from '../data/catalog.js';
 import { artifacts } from '../data/artifacts.js';
 import { mutators, outfitColor, vaults } from '../data/campaign.js';
 import { CLOUD_TYPES, DAMAGE_TYPES, SHRINE_TYPES, equipmentSlots } from '../data/constants.js';
 import { getUnitMeta, searchCatalogue, units } from '../data/bestiary.js';
-import { craftableEquipment, knownSpellIds, spellByName } from '../rules/rw3.js';
+import { craftableEquipment, knownSpellIds, spellByName } from '../rules/core.js';
 import { componentName, equipmentName } from '../i18n/game-text.js';
 import { t } from '../i18n/i18n.js';
 import {
   TAG_COLORS, cloudIconSvg, componentIconSvg, entityIconSvg,
   shrineIconSvg, slotIconSvg, tagIconSvg, unitIconSvg,
 } from './svg-icons.js';
-import { cleanRw3Desc, escapeHtml, h } from './dom.js';
+import { cleanCatalogDesc, escapeHtml, h } from './dom.js';
 
 const PAGE_STEP = 48;
 
@@ -18,9 +18,9 @@ export const WIKI_CATEGORIES = [
   'monsters', 'bosses', 'companions', 'spells', 'equipment', 'items', 'world',
 ];
 
-const ALL_UNIT_TAGS = [...new Set(rw3Units.flatMap(u => u.tags || []))].sort();
+const ALL_UNIT_TAGS = [...new Set(unitCatalog.flatMap(u => u.tags || []))].sort();
 const SPELLS_BY_BOOK = new Map();
-for (const spell of rw3Spells) {
+for (const spell of spells) {
   if (spell.granted_by) {
     let list = SPELLS_BY_BOOK.get(spell.granted_by);
     if (!list) { list = []; SPELLS_BY_BOOK.set(spell.granted_by, list); }
@@ -38,13 +38,13 @@ const REALM_PICKUPS = [
 ];
 
 const DATASETS = {
-  monsters: rw3Units.filter(u => !u.is_boss && !u.is_companion),
-  bosses: rw3Units.filter(u => u.is_boss),
-  companions: rw3Units.filter(u => u.is_companion),
-  spells: rw3Spells,
-  equipment: rw3Equipment,
+  monsters: unitCatalog.filter(u => !u.is_boss && !u.is_companion),
+  bosses: unitCatalog.filter(u => u.is_boss),
+  companions: unitCatalog.filter(u => u.is_companion),
+  spells,
+  equipment,
   items: [
-    ...rw3Components.map(c => ({ kind: 'component', id: `comp:${c.name}`, data: c })),
+    ...components.map(c => ({ kind: 'component', id: `comp:${c.name}`, data: c })),
     ...REALM_PICKUPS.map(p => ({ kind: 'pickup', id: `pickup:${p.id}`, data: p })),
     ...artifacts.map(a => ({ kind: 'artifact', id: `art:${a.id}`, data: a })),
   ],
@@ -379,11 +379,11 @@ function renderUnitCard(unit, category, defeatedSet) {
   if (unit.difficulty) stats.push(`D${unit.difficulty}`);
   const traits = unitTraits(unit);
   const previewAbilities = (unit.abilities || []).slice(0, 2).map(a => a.name).join(' · ');
-  const previewPassive = unit.passives?.[0] ? cleanRw3Desc(unit.passives[0]) : '';
+  const previewPassive = unit.passives?.[0] ? cleanCatalogDesc(unit.passives[0]) : '';
 
-  return `<article class="rw3-card wiki-card ${unit.is_boss ? 'wiki-card-boss' : ''} ${defeated ? 'wiki-card-discovered' : ''}" data-wiki-open="${escapeHtml(category)}:${escapeHtml(unit.name)}" tabindex="0" role="button">
-    <div class="rw3-card-head">
-      <div class="rw3-card-title-group">
+  return `<article class="catalog-card wiki-card ${unit.is_boss ? 'wiki-card-boss' : ''} ${defeated ? 'wiki-card-discovered' : ''}" data-wiki-open="${escapeHtml(category)}:${escapeHtml(unit.name)}" tabindex="0" role="button">
+    <div class="catalog-card-head">
+      <div class="catalog-card-title-group">
         <span class="card-emblem wiki-emblem" style="border-color:${primaryColor}66">${unitIconSvg(unit, 26)}</span>
         <div class="wiki-title-stack">
           <h3>${escapeHtml(unit.name)}</h3>
@@ -391,15 +391,15 @@ function renderUnitCard(unit, category, defeatedSet) {
         </div>
       </div>
       <div class="wiki-badge-col">
-        <span class="rw3-lvl ${roleCls}">${escapeHtml(roleLabel(unit))}</span>
+        <span class="catalog-badge ${roleCls}">${escapeHtml(roleLabel(unit))}</span>
         ${defeated ? `<span class="wiki-mini-flag">${h('wiki.label.defeatedBadge')}</span>` : ''}
       </div>
     </div>
     <div class="chip-wrap">${(unit.tags || []).map(tagPillHtml).join('')}</div>
-    <div class="rw3-stats-line">${stats.map(x => `<span>${escapeHtml(x)}</span>`).join('')}</div>
+    <div class="catalog-stats-line">${stats.map(x => `<span>${escapeHtml(x)}</span>`).join('')}</div>
     ${renderAffinityBadges(unit.resists, { compact: true })}
     ${previewAbilities ? `<p class="wiki-preview-line"><strong>${h('wiki.label.abilities')}:</strong> ${escapeHtml(previewAbilities)}${unit.abilities.length > 2 ? ` +${unit.abilities.length - 2}` : ''}</p>` : ''}
-    ${previewPassive ? `<p class="rw3-desc wiki-clamp">${escapeHtml(previewPassive)}</p>` : ''}
+    ${previewPassive ? `<p class="catalog-desc wiki-clamp">${escapeHtml(previewPassive)}</p>` : ''}
   </article>`;
 }
 
@@ -416,9 +416,9 @@ function renderSpellCard(spell, learnedSet) {
   if (spell.stats?.hp_cost) stats.push(`HP -${spell.stats.hp_cost}`);
   if (spell.stats?.minion_health) stats.push(`MINION ${spell.stats.minion_health} HP`);
 
-  return `<article class="rw3-card wiki-card ${isLearned ? 'learned-card' : ''}" data-wiki-open="spells:${spell.id}" tabindex="0" role="button">
-    <div class="rw3-card-head">
-      <div class="rw3-card-title-group">
+  return `<article class="catalog-card wiki-card ${isLearned ? 'learned-card' : ''}" data-wiki-open="spells:${spell.id}" tabindex="0" role="button">
+    <div class="catalog-card-head">
+      <div class="catalog-card-title-group">
         <span class="card-emblem wiki-emblem" style="border-color:${primaryColor}66">${tagIconSvg(primaryTag, 26)}</span>
         <div class="wiki-title-stack">
           <h3>${escapeHtml(spell.name)}</h3>
@@ -426,13 +426,13 @@ function renderSpellCard(spell, learnedSet) {
         </div>
       </div>
       <div class="wiki-badge-col">
-        <span class="rw3-lvl">LVL ${spell.level} · ${spell.level} SP</span>
-        ${isLearned ? `<span class="wiki-mini-flag">${h('rw3.learnedBadge')}</span>` : ''}
+        <span class="catalog-badge">LVL ${spell.level} · ${spell.level} SP</span>
+        ${isLearned ? `<span class="wiki-mini-flag">${h('compendium.learnedBadge')}</span>` : ''}
       </div>
     </div>
     <div class="chip-wrap">${spell.tags.map(tagPillHtml).join('')}</div>
-    <div class="rw3-stats-line">${stats.map(x => `<span>${escapeHtml(x)}</span>`).join('')}</div>
-    <p class="rw3-desc wiki-clamp">${escapeHtml(cleanRw3Desc(spell.desc))}</p>
+    <div class="catalog-stats-line">${stats.map(x => `<span>${escapeHtml(x)}</span>`).join('')}</div>
+    <p class="catalog-desc wiki-clamp">${escapeHtml(cleanCatalogDesc(spell.desc))}</p>
     <div class="wiki-card-foot">
       <span>${h('wiki.label.upgrades')}: ${(spell.upgrades || []).length}</span>
       ${spell.quick_cast ? `<span class="wiki-tag-note">⚡ ${h('wiki.label.quickCast')}</span>` : ''}
@@ -447,12 +447,12 @@ function renderEquipmentCard(item, equippedSet, craftableSet) {
   const isEquipped = equippedSet.has(item.name);
   const canCraft = craftableSet.has(item.name);
   const recipeText = item.recipe.map(([tg, c]) => `${c}× ${tg}`).join(' + ');
-  const summary = [...(item.bonuses || []), item.desc].filter(Boolean).map(cleanRw3Desc).join('\n');
+  const summary = [...(item.bonuses || []), item.desc].filter(Boolean).map(cleanCatalogDesc).join('\n');
   const granted = SPELLS_BY_BOOK.get(item.name);
 
-  return `<article class="rw3-card wiki-card ${isEquipped ? 'learned-card' : canCraft ? 'craftable-card' : ''}" data-wiki-open="equipment:${escapeHtml(item.name)}" tabindex="0" role="button">
-    <div class="rw3-card-head">
-      <div class="rw3-card-title-group">
+  return `<article class="catalog-card wiki-card ${isEquipped ? 'learned-card' : canCraft ? 'craftable-card' : ''}" data-wiki-open="equipment:${escapeHtml(item.name)}" tabindex="0" role="button">
+    <div class="catalog-card-head">
+      <div class="catalog-card-title-group">
         <span class="card-emblem wiki-emblem" style="border-color:${primaryColor}66">${slotIconSvg(item.slot, 24)}</span>
         <div class="wiki-title-stack">
           <h3>${escapeHtml(locName)}</h3>
@@ -460,14 +460,14 @@ function renderEquipmentCard(item, equippedSet, craftableSet) {
         </div>
       </div>
       <div class="wiki-badge-col">
-        <span class="rw3-lvl">${h(`slots.${item.slot.toLowerCase()}`)}</span>
-        ${isEquipped ? `<span class="wiki-mini-flag">${h('rw3.equippedSlot')}</span>` : ''}
+        <span class="catalog-badge">${h(`slots.${item.slot.toLowerCase()}`)}</span>
+        ${isEquipped ? `<span class="wiki-mini-flag">${h('compendium.equippedSlot')}</span>` : ''}
       </div>
     </div>
     <div class="chip-wrap">${item.tags.map(tagPillHtml).join('')}</div>
-    <div class="rw3-stats-line"><span>${escapeHtml(recipeText)}</span></div>
+    <div class="catalog-stats-line"><span>${escapeHtml(recipeText)}</span></div>
     ${granted ? `<p class="wiki-preview-line"><strong>${h('wiki.label.grantedSpell')}:</strong> ${escapeHtml(granted.map(s => s.name).join(', '))}</p>` : ''}
-    <p class="rw3-desc wiki-clamp">${escapeHtml(summary)}</p>
+    <p class="catalog-desc wiki-clamp">${escapeHtml(summary)}</p>
   </article>`;
 }
 
@@ -477,9 +477,9 @@ function renderItemCard(entry) {
     const locName = componentName(c.name);
     const primaryColor = TAG_COLORS[c.tags?.[0]] || '#c084fc';
     const triggerLabel = c.on_pickup ? t('wiki.label.onPickup') : t('wiki.label.onCraft');
-    return `<article class="rw3-card wiki-card ${c.rare ? 'craftable-card' : ''}" data-wiki-open="items:${escapeHtml(entry.id)}" tabindex="0" role="button">
-      <div class="rw3-card-head">
-        <div class="rw3-card-title-group">
+    return `<article class="catalog-card wiki-card ${c.rare ? 'craftable-card' : ''}" data-wiki-open="items:${escapeHtml(entry.id)}" tabindex="0" role="button">
+      <div class="catalog-card-head">
+        <div class="catalog-card-title-group">
           <span class="card-emblem wiki-emblem" style="border-color:${c.rare ? '#ffdf9f' : primaryColor + '66'}">${componentIconSvg(c, 26)}</span>
           <div class="wiki-title-stack">
             <h3>${escapeHtml(locName)}</h3>
@@ -487,42 +487,42 @@ function renderItemCard(entry) {
           </div>
         </div>
         <div class="wiki-badge-col">
-          <span class="rw3-lvl">${h('wiki.label.tier', { n: c.tier })}</span>
+          <span class="catalog-badge">${h('wiki.label.tier', { n: c.tier })}</span>
           <span class="wiki-mini-flag ${c.rare ? 'rare' : ''}">${h(c.rare ? 'wiki.label.rare' : 'wiki.label.common')}</span>
         </div>
       </div>
       <div class="chip-wrap">${c.tags.map(tagPillHtml).join('')}</div>
-      <div class="rw3-stats-line"><span>${escapeHtml(triggerLabel)}</span></div>
-      <p class="rw3-desc wiki-clamp">${escapeHtml(cleanRw3Desc(c.desc))}</p>
+      <div class="catalog-stats-line"><span>${escapeHtml(triggerLabel)}</span></div>
+      <p class="catalog-desc wiki-clamp">${escapeHtml(cleanCatalogDesc(c.desc))}</p>
     </article>`;
   }
 
   if (entry.kind === 'pickup') {
     const p = entry.data;
-    return `<article class="rw3-card wiki-card" data-wiki-open="items:${escapeHtml(entry.id)}" tabindex="0" role="button">
-      <div class="rw3-card-head">
-        <div class="rw3-card-title-group">
+    return `<article class="catalog-card wiki-card" data-wiki-open="items:${escapeHtml(entry.id)}" tabindex="0" role="button">
+      <div class="catalog-card-head">
+        <div class="catalog-card-title-group">
           <span class="card-emblem wiki-emblem">${entityIconSvg(p.icon, 26)}</span>
           <h3>${h(p.titleKey)}</h3>
         </div>
-        <span class="rw3-lvl">${h('wiki.filter.itemPickup')}</span>
+        <span class="catalog-badge">${h('wiki.filter.itemPickup')}</span>
       </div>
-      <p class="rw3-desc">${h(p.descKey)}</p>
+      <p class="catalog-desc">${h(p.descKey)}</p>
     </article>`;
   }
 
   const a = entry.data;
   const recipeText = Object.entries(a.recipe).map(([k, v]) => `${v}× ${t(`materials.${k}`)}`).join(' + ');
-  return `<article class="rw3-card wiki-card" data-wiki-open="items:${escapeHtml(entry.id)}" tabindex="0" role="button">
-    <div class="rw3-card-head">
-      <div class="rw3-card-title-group">
+  return `<article class="catalog-card wiki-card" data-wiki-open="items:${escapeHtml(entry.id)}" tabindex="0" role="button">
+    <div class="catalog-card-head">
+      <div class="catalog-card-title-group">
         <span class="card-emblem wiki-emblem" style="border-color:#ffdf9f66">${entityIconSvg('artifact', 26)}</span>
         <h3>${h(`artifacts.${a.id}.name`)}</h3>
       </div>
-      <span class="rw3-lvl">${h('wiki.filter.itemArtifact')}</span>
+      <span class="catalog-badge">${h('wiki.filter.itemArtifact')}</span>
     </div>
-    <div class="rw3-stats-line"><span>${escapeHtml(recipeText)}</span></div>
-    <p class="rw3-desc">${h(`artifacts.${a.id}.description`)}</p>
+    <div class="catalog-stats-line"><span>${escapeHtml(recipeText)}</span></div>
+    <p class="catalog-desc">${h(`artifacts.${a.id}.description`)}</p>
   </article>`;
 }
 
@@ -530,15 +530,15 @@ function renderWorldCard(entry, unlockedOutfits) {
   if (entry.kind === 'shrine') {
     const s = entry.data;
     const desc = s === 'transmutation' ? t('inspection.shrineDescription', { uses: 3 }) : t(`shrine.${s}Desc`);
-    return `<article class="rw3-card wiki-card" data-wiki-open="world:${escapeHtml(entry.id)}" tabindex="0" role="button">
-      <div class="rw3-card-head">
-        <div class="rw3-card-title-group">
+    return `<article class="catalog-card wiki-card" data-wiki-open="world:${escapeHtml(entry.id)}" tabindex="0" role="button">
+      <div class="catalog-card-head">
+        <div class="catalog-card-title-group">
           <span class="card-emblem wiki-emblem" style="border-color:#7bd0ff55">${shrineIconSvg(s, 26)}</span>
           <h3>${h(`shrine.${s}`)}</h3>
         </div>
-        <span class="rw3-lvl">${h('wiki.filter.worldShrines')}</span>
+        <span class="catalog-badge">${h('wiki.filter.worldShrines')}</span>
       </div>
-      <p class="rw3-desc">${escapeHtml(desc)}</p>
+      <p class="catalog-desc">${escapeHtml(desc)}</p>
     </article>`;
   }
 
@@ -547,31 +547,31 @@ function renderWorldCard(entry, unlockedOutfits) {
     const descParts = [];
     if (c.damage && c.damageType) descParts.push(t('wiki.cloud.desc', { damage: c.damage, type: c.damageType }));
     if (c.status) descParts.push(t('wiki.cloud.statusOnly', { status: c.status, duration: c.statusDuration || 1 }));
-    return `<article class="rw3-card wiki-card" data-wiki-open="world:${escapeHtml(entry.id)}" tabindex="0" role="button">
-      <div class="rw3-card-head">
-        <div class="rw3-card-title-group">
+    return `<article class="catalog-card wiki-card" data-wiki-open="world:${escapeHtml(entry.id)}" tabindex="0" role="button">
+      <div class="catalog-card-head">
+        <div class="catalog-card-title-group">
           <span class="card-emblem wiki-emblem" style="border-color:${c.color}66">${cloudIconSvg(c.color, 26)}</span>
           <h3>${escapeHtml(c.name)}</h3>
         </div>
-        <span class="rw3-lvl">${h('wiki.filter.worldClouds')}</span>
+        <span class="catalog-badge">${h('wiki.filter.worldClouds')}</span>
       </div>
-      <div class="rw3-stats-line">
+      <div class="catalog-stats-line">
         ${c.damageType ? `<span>${escapeHtml(c.damageType)} · ${c.damage} DMG</span>` : `<span>${h('wiki.label.noDamage')}</span>`}
         ${c.status ? `<span>${escapeHtml(c.status)} (${c.statusDuration}t)</span>` : ''}
       </div>
-      <p class="rw3-desc">${escapeHtml(descParts.join(' '))}</p>
+      <p class="catalog-desc">${escapeHtml(descParts.join(' '))}</p>
     </article>`;
   }
 
   if (entry.kind === 'vault') {
     const v = entry.data;
-    return `<article class="rw3-card wiki-card" data-wiki-open="world:${escapeHtml(entry.id)}" tabindex="0" role="button">
-      <div class="rw3-card-head">
-        <div class="rw3-card-title-group">
+    return `<article class="catalog-card wiki-card" data-wiki-open="world:${escapeHtml(entry.id)}" tabindex="0" role="button">
+      <div class="catalog-card-head">
+        <div class="catalog-card-title-group">
           <span class="card-emblem wiki-emblem" style="border-color:#e5c27b66">${entityIconSvg('vault', 26)}</span>
           <h3>${h('vault.name', { name: v.name })}</h3>
         </div>
-        <span class="rw3-lvl">${h('wiki.filter.worldVaults')}</span>
+        <span class="catalog-badge">${h('wiki.filter.worldVaults')}</span>
       </div>
       <p class="wiki-preview-line"><strong>${h('wiki.label.guardians')}:</strong> ${escapeHtml(v.guardians.join(' · '))}</p>
     </article>`;
@@ -579,15 +579,15 @@ function renderWorldCard(entry, unlockedOutfits) {
 
   if (entry.kind === 'mutator') {
     const m = entry.data;
-    return `<article class="rw3-card wiki-card" data-wiki-open="world:${escapeHtml(entry.id)}" tabindex="0" role="button">
-      <div class="rw3-card-head">
-        <div class="rw3-card-title-group">
+    return `<article class="catalog-card wiki-card" data-wiki-open="world:${escapeHtml(entry.id)}" tabindex="0" role="button">
+      <div class="catalog-card-head">
+        <div class="catalog-card-title-group">
           <span class="card-emblem wiki-emblem" style="border-color:#f8717166">${entityIconSvg('mutator', 26)}</span>
           <h3>${escapeHtml(m)}</h3>
         </div>
-        <span class="rw3-lvl">${h('wiki.filter.worldMutators')}</span>
+        <span class="catalog-badge">${h('wiki.filter.worldMutators')}</span>
       </div>
-      <p class="rw3-desc">${h(`mutators.${m}`)}</p>
+      <p class="catalog-desc">${h(`mutators.${m}`)}</p>
     </article>`;
   }
 
@@ -595,15 +595,15 @@ function renderWorldCard(entry, unlockedOutfits) {
   const unlocked = unlockedOutfits.has(w.name);
   const colors = outfitColor(w.name);
   const swatch = colors ? `style="background:linear-gradient(135deg, ${colors.hat}, ${colors.robe});border-color:${colors.hat}"` : '';
-  return `<article class="rw3-card wiki-card ${unlocked ? 'learned-card' : ''}" data-wiki-open="world:${escapeHtml(entry.id)}" tabindex="0" role="button">
-    <div class="rw3-card-head">
-      <div class="rw3-card-title-group">
+  return `<article class="catalog-card wiki-card ${unlocked ? 'learned-card' : ''}" data-wiki-open="world:${escapeHtml(entry.id)}" tabindex="0" role="button">
+    <div class="catalog-card-head">
+      <div class="catalog-card-title-group">
         <span class="card-emblem wiki-emblem" ${swatch}>${entityIconSvg('outfit', 24)}</span>
         <h3>${escapeHtml(w.name)}</h3>
       </div>
-      <span class="rw3-lvl">${h(unlocked ? 'wiki.label.unlockedBadge' : 'wiki.label.lockedBadge')}</span>
+      <span class="catalog-badge">${h(unlocked ? 'wiki.label.unlockedBadge' : 'wiki.label.lockedBadge')}</span>
     </div>
-    <p class="rw3-desc">${escapeHtml(w.unlock || t('wiki.label.defaultOutfit'))}</p>
+    <p class="catalog-desc">${escapeHtml(w.unlock || t('wiki.label.defaultOutfit'))}</p>
   </article>`;
 }
 
@@ -621,14 +621,14 @@ function renderUnitDetail(unit, defeatedSet) {
       if (a.cool_down) chips.push(t('wiki.label.cooldown', { n: a.cool_down }));
       if (a.melee) chips.push(t('wiki.label.melee'));
       return `<div class="wiki-detail-item">
-        <div class="wiki-detail-item-head"><strong>${escapeHtml(a.name)}</strong><div class="wiki-inline-chips">${chips.map(c => `<span class="rw3-lvl">${escapeHtml(c)}</span>`).join('')}</div></div>
-        ${a.desc ? `<p class="rw3-desc">${escapeHtml(cleanRw3Desc(a.desc))}</p>` : ''}
+        <div class="wiki-detail-item-head"><strong>${escapeHtml(a.name)}</strong><div class="wiki-inline-chips">${chips.map(c => `<span class="catalog-badge">${escapeHtml(c)}</span>`).join('')}</div></div>
+        ${a.desc ? `<p class="catalog-desc">${escapeHtml(cleanCatalogDesc(a.desc))}</p>` : ''}
       </div>`;
     }).join('')}</div>`
     : '';
 
   const passivesHtml = (unit.passives || []).length
-    ? `<h3 class="wiki-section-title">${h('wiki.label.passives')}</h3><ul class="wiki-passive-list">${unit.passives.map(p => `<li>${escapeHtml(cleanRw3Desc(p))}</li>`).join('')}</ul>`
+    ? `<h3 class="wiki-section-title">${h('wiki.label.passives')}</h3><ul class="wiki-passive-list">${unit.passives.map(p => `<li>${escapeHtml(cleanCatalogDesc(p))}</li>`).join('')}</ul>`
     : '';
 
   const escortBtn = unit.escorted_by && units.has(unit.escorted_by)
@@ -680,8 +680,8 @@ function renderSpellDetail(spell, learnedSet) {
   const upgradesHtml = (spell.upgrades || []).length
     ? `<h3 class="wiki-section-title">${h('wiki.label.upgrades')} (${spell.upgrades.length})</h3><div class="wiki-detail-list">${spell.upgrades.map(u => `
       <div class="wiki-detail-item">
-        <div class="wiki-detail-item-head"><strong>${escapeHtml(u.name)}</strong><span class="rw3-lvl">${u.level} SP</span></div>
-        <p class="rw3-desc">${escapeHtml(cleanRw3Desc(u.desc))}</p>
+        <div class="wiki-detail-item-head"><strong>${escapeHtml(u.name)}</strong><span class="catalog-badge">${u.level} SP</span></div>
+        <p class="catalog-desc">${escapeHtml(cleanCatalogDesc(u.desc))}</p>
       </div>
     `).join('')}</div>`
     : '';
@@ -690,12 +690,12 @@ function renderSpellDetail(spell, learnedSet) {
     <div class="wiki-detail-hero">
       <span class="wiki-detail-emblem" style="border-color:${primaryColor}88">${tagIconSvg(primaryTag, 46)}</span>
       <div>
-        <div class="eyebrow">${h('wiki.cat.spells')} · LVL ${spell.level}${isLearned ? ` · ${h('rw3.learnedBadge')}` : ''}</div>
+        <div class="eyebrow">${h('wiki.cat.spells')} · LVL ${spell.level}${isLearned ? ` · ${h('compendium.learnedBadge')}` : ''}</div>
         <h2>${escapeHtml(spell.name)}</h2>
         <div class="chip-wrap">${spell.tags.map(tagPillHtml).join('')}</div>
       </div>
     </div>
-    <p class="rw3-desc wiki-detail-desc">${escapeHtml(cleanRw3Desc(spell.desc))}</p>
+    <p class="catalog-desc wiki-detail-desc">${escapeHtml(cleanCatalogDesc(spell.desc))}</p>
     <div class="detail-stats wiki-detail-stats-4">
       <div>DMG<strong>${st.damage || '—'}${spell.damage_type?.length ? ` (${spell.damage_type.join('/')})` : ''}</strong></div>
       <div>RNG / AREA<strong>${st.range ?? '—'} / ${st.radius ?? '—'}</strong></div>
@@ -722,15 +722,15 @@ function renderEquipmentDetail(item, equippedSet) {
     <div class="wiki-detail-hero">
       <span class="wiki-detail-emblem" style="border-color:${primaryColor}88">${slotIconSvg(item.slot, 44)}</span>
       <div>
-        <div class="eyebrow">${h(`slots.${item.slot.toLowerCase()}`)}${equippedSet.has(item.name) ? ` · ${h('rw3.equippedSlot')}` : ''}</div>
+        <div class="eyebrow">${h(`slots.${item.slot.toLowerCase()}`)}${equippedSet.has(item.name) ? ` · ${h('compendium.equippedSlot')}` : ''}</div>
         <h2>${escapeHtml(locName)}</h2>
         ${locName !== item.name ? `<p class="muted" style="margin:0 0 6px">${escapeHtml(item.name)}</p>` : ''}
         <div class="chip-wrap">${item.tags.map(tagPillHtml).join('')}</div>
       </div>
     </div>
     <div class="wiki-crosslinks"><span>${h('wiki.label.recipe')} (${item.recipe_cost}):</span>${recipePills}</div>
-    ${(item.bonuses || []).length ? `<h3 class="wiki-section-title">${h('wiki.label.bonuses')}</h3><ul class="wiki-passive-list">${item.bonuses.map(b => `<li>${escapeHtml(cleanRw3Desc(b))}</li>`).join('')}</ul>` : ''}
-    ${item.desc ? `<h3 class="wiki-section-title">${h('wiki.label.effects')}</h3><p class="rw3-desc wiki-detail-desc">${escapeHtml(cleanRw3Desc(item.desc))}</p>` : ''}
+    ${(item.bonuses || []).length ? `<h3 class="wiki-section-title">${h('wiki.label.bonuses')}</h3><ul class="wiki-passive-list">${item.bonuses.map(b => `<li>${escapeHtml(cleanCatalogDesc(b))}</li>`).join('')}</ul>` : ''}
+    ${item.desc ? `<h3 class="wiki-section-title">${h('wiki.label.effects')}</h3><p class="catalog-desc wiki-detail-desc">${escapeHtml(cleanCatalogDesc(item.desc))}</p>` : ''}
     ${granted.length ? `<div class="wiki-crosslinks"><span>${h('wiki.label.grantedSpell')}:</span>${granted.map(s => `<button class="wiki-link-chip" data-wiki-jump-spell="${s.id}">${tagIconSvg(s.tags?.[0] || 'Arcane', 14)}<span>${escapeHtml(s.name)}</span></button>`).join('')}</div>` : ''}
     ${summonsLinks ? `<div class="wiki-crosslinks"><span>${h('wiki.label.summons')}:</span>${summonsLinks}</div>` : ''}
   `;
@@ -758,7 +758,7 @@ function renderItemDetail(entry) {
         <div>TRIGGER<strong>${h(c.on_pickup ? 'wiki.label.onPickup' : 'wiki.label.onCraft')}</strong></div>
         <div>POOL<strong>${escapeHtml(c.pool || 'normal')}</strong></div>
       </div>
-      <p class="rw3-desc wiki-detail-desc">${escapeHtml(cleanRw3Desc(c.desc))}</p>
+      <p class="catalog-desc wiki-detail-desc">${escapeHtml(cleanCatalogDesc(c.desc))}</p>
       ${summonsLinks ? `<div class="wiki-crosslinks"><span>${h('wiki.label.summons')}:</span>${summonsLinks}</div>` : ''}
     `;
   }
@@ -772,7 +772,7 @@ function renderItemDetail(entry) {
           <h2>${h(p.titleKey)}</h2>
         </div>
       </div>
-      <p class="rw3-desc wiki-detail-desc">${h(p.descKey)}</p>
+      <p class="catalog-desc wiki-detail-desc">${h(p.descKey)}</p>
     `;
   }
   const a = entry.data;
@@ -786,7 +786,7 @@ function renderItemDetail(entry) {
       </div>
     </div>
     <div class="wiki-crosslinks"><span>${h('wiki.label.recipe')}:</span><span class="tag-pill">${escapeHtml(recipeText)}</span></div>
-    <p class="rw3-desc wiki-detail-desc">${h(`artifacts.${a.id}.description`)}</p>
+    <p class="catalog-desc wiki-detail-desc">${h(`artifacts.${a.id}.description`)}</p>
   `;
 }
 
@@ -802,7 +802,7 @@ function renderWorldDetail(entry, unlockedOutfits) {
           <h2>${h(`shrine.${s}`)}</h2>
         </div>
       </div>
-      <p class="rw3-desc wiki-detail-desc">${escapeHtml(desc)}</p>
+      <p class="catalog-desc wiki-detail-desc">${escapeHtml(desc)}</p>
     `;
   }
   if (entry.kind === 'cloud') {
@@ -822,7 +822,7 @@ function renderWorldDetail(entry, unlockedOutfits) {
         <div>DMG<strong>${c.damage ? `${c.damage} ${c.damageType}` : t('wiki.label.noDamage')}</strong></div>
         <div>STATUS<strong>${c.status ? `${c.status} (${c.statusDuration}t)` : '—'}</strong></div>
       </div>
-      <p class="rw3-desc wiki-detail-desc">${escapeHtml(descParts.join(' '))}</p>
+      <p class="catalog-desc wiki-detail-desc">${escapeHtml(descParts.join(' '))}</p>
     `;
   }
   if (entry.kind === 'vault') {
@@ -854,7 +854,7 @@ function renderWorldDetail(entry, unlockedOutfits) {
           <h2>${escapeHtml(m)}</h2>
         </div>
       </div>
-      <p class="rw3-desc wiki-detail-desc">${h(`mutators.${m}`)}</p>
+      <p class="catalog-desc wiki-detail-desc">${h(`mutators.${m}`)}</p>
     `;
   }
   const w = entry.data;
@@ -870,7 +870,7 @@ function renderWorldDetail(entry, unlockedOutfits) {
       </div>
     </div>
     <h3 class="wiki-section-title">${h('wiki.label.unlockCondition')}</h3>
-    <p class="rw3-desc wiki-detail-desc">${escapeHtml(w.unlock || t('wiki.label.defaultOutfit'))}</p>
+    <p class="catalog-desc wiki-detail-desc">${escapeHtml(w.unlock || t('wiki.label.defaultOutfit'))}</p>
   `;
 }
 
@@ -934,8 +934,8 @@ function buildFilterControlsHtml(category, f) {
         : [['name', t('wiki.sort.name')], ['hpDesc', t('wiki.sort.hpDesc')]];
     controls.push(`<select data-wiki-filter="sort">${optionList(sortOpts, f.sort)}</select>`);
   } else if (category === 'spells') {
-    controls.push(`<select data-wiki-filter="tag">${optionList([['all', t('wiki.filter.allTags')], ...rw3Tags.map(tg => [tg, tg])], f.tag)}</select>`);
-    controls.push(`<select data-wiki-filter="level">${optionList([['all', t('rw3.allLevels')], ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map(l => [String(l), `Lvl ${l}`])], f.level)}</select>`);
+    controls.push(`<select data-wiki-filter="tag">${optionList([['all', t('wiki.filter.allTags')], ...tags.map(tg => [tg, tg])], f.tag)}</select>`);
+    controls.push(`<select data-wiki-filter="level">${optionList([['all', t('compendium.allLevels')], ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map(l => [String(l), `Lvl ${l}`])], f.level)}</select>`);
     controls.push(`<select data-wiki-filter="dmgType">${optionList([['all', t('wiki.filter.damageTypeAll')], ['utility', t('wiki.filter.utility')], ...dmgOpts.slice(1)], f.dmgType)}</select>`);
     controls.push(`<select data-wiki-filter="special">${optionList([
       ['all', t('wiki.filter.spellSpecialAll')],
@@ -953,8 +953,8 @@ function buildFilterControlsHtml(category, f) {
       ['damageDesc', t('wiki.sort.damageDesc')],
     ], f.sort)}</select>`);
   } else if (category === 'equipment') {
-    controls.push(`<select data-wiki-filter="slot">${optionList([['all', t('rw3.allSlots')], ...equipmentSlots.map(s => [s, t(`slots.${s.toLowerCase()}`)])], f.slot)}</select>`);
-    controls.push(`<select data-wiki-filter="tag">${optionList([['all', t('wiki.filter.allTags')], ...rw3Tags.map(tg => [tg, tg])], f.tag)}</select>`);
+    controls.push(`<select data-wiki-filter="slot">${optionList([['all', t('compendium.allSlots')], ...equipmentSlots.map(s => [s, t(`slots.${s.toLowerCase()}`)])], f.slot)}</select>`);
+    controls.push(`<select data-wiki-filter="tag">${optionList([['all', t('wiki.filter.allTags')], ...tags.map(tg => [tg, tg])], f.tag)}</select>`);
     controls.push(`<select data-wiki-filter="cost">${optionList([
       ['all', t('wiki.filter.costAll')],
       ['2', t('wiki.filter.costN', { n: 2 })],
@@ -981,7 +981,7 @@ function buildFilterControlsHtml(category, f) {
       ['pickup', t('wiki.filter.itemPickup')],
       ['artifact', t('wiki.filter.itemArtifact')],
     ], f.itemType)}</select>`);
-    controls.push(`<select data-wiki-filter="tag">${optionList([['all', t('wiki.filter.allTags')], ...rw3Tags.map(tg => [tg, tg])], f.tag)}</select>`);
+    controls.push(`<select data-wiki-filter="tag">${optionList([['all', t('wiki.filter.allTags')], ...tags.map(tg => [tg, tg])], f.tag)}</select>`);
     controls.push(`<select data-wiki-filter="tier">${optionList([
       ['all', t('wiki.filter.tierAll')],
       ['1', t('wiki.filter.tierN', { n: 1 })],
@@ -1057,7 +1057,7 @@ export function createWikiController(root, { getState, standalone = false } = {}
         <div class="wiki-select-row" id="wiki-filter-selects"></div>
       </div>
 
-      <div id="wiki-grid" class="rw3-grid wiki-grid"></div>
+      <div id="wiki-grid" class="catalog-grid wiki-grid"></div>
       <div id="wiki-pagination" class="wiki-pagination"></div>
     `;
 

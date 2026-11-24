@@ -16,7 +16,7 @@ export function $(id) {
 const HTML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 export const escapeHtml = value => String(value).replace(/[&<>"']/g, char => HTML_ESCAPES[char]);
 export const h = (key, params) => escapeHtml(t(key, params));
-export const cleanRw3Desc = text => String(text || '').replace(/\[([^:\]]+)(?::[^\]]+)?\]/g, '$1');
+export const cleanCatalogDesc = text => String(text || '').replace(/\[([^:\]]+)(?::[^\]]+)?\]/g, '$1');
 
 export function loadStorageItem(key) {
   try {

@@ -2,12 +2,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createGame, generateRealm, availableSpells, cast, move, wait,
-  learnRw3Spell, learnRw3Upgrade, deploy, restore, serialize, SIZE, tagMastery,
+  learnSpell, learnUpgrade, deploy, restore, serialize, SIZE, tagMastery,
 } from '../src/engine/index.js';
-import { spellByName, effectiveRw3Spell } from '../src/rules/rw3.js';
+import { spellByName, effectiveSpell } from '../src/rules/core.js';
 import { units, unitStats } from '../src/data/bestiary.js';
 
-function arena(mode = 'rw3') {
+function arena(mode = 'classic') {
   const game = createGame(31, { mode });
   game.tiles = Array.from({ length: SIZE }, (_, y) => Array.from({ length: SIZE }, (_, x) => Number(!x || !y || x === SIZE - 1 || y === SIZE - 1)));
   game.enemies = []; game.allies = []; game.items = []; game.clouds = []; game.buffs = [];
@@ -47,13 +47,13 @@ function addAlly(game, x, y, species, opts = {}) {
 
 function learn(game, name, upgrades = []) {
   const s = spellByName.get(name);
-  if (!availableSpells(game).some(e => e.rw3Id === s.id)) assert.ok(learnRw3Spell(game, s.id), name);
+  if (!availableSpells(game).some(e => e.spellId === s.id)) assert.ok(learnSpell(game, s.id), name);
   for (const up of upgrades) {
     const found = s.upgrades.find(u => u.name === up);
     assert.ok(found, `${name} -> ${up}`);
-    assert.ok(learnRw3Upgrade(game, s.id, found.sp_id), `${name} -> ${up}`);
+    assert.ok(learnUpgrade(game, s.id, found.sp_id), `${name} -> ${up}`);
   }
-  return 'rw3-' + s.id;
+  return 'spell-' + s.id;
 }
 
 // ============================================================================
@@ -279,9 +279,9 @@ test("3. Blood Bullet -> Sniper's Trance stacks range & damage on wait, ignores 
   gNoUp.tiles[11][5] = 1; // wall between player (3,11) and enemy (7,11)
   const walled = addEnemy(gNoUp, 7, 11, { hp: 200, maxHp: 200, resistances: {} });
   assert.ok(wait(gNoUp));
-  assert.equal(effectiveRw3Spell(gNoUp, 10).range, 10);
-  assert.equal(effectiveRw3Spell(gNoUp, 10).damage, 10);
-  assert.equal(effectiveRw3Spell(gNoUp, 10).requiresLos, true);
+  assert.equal(effectiveSpell(gNoUp, 10).range, 10);
+  assert.equal(effectiveSpell(gNoUp, 10).damage, 10);
+  assert.equal(effectiveSpell(gNoUp, 10).requiresLos, true);
   assert.equal(cast(gNoUp, bbBase, walled), false);
 
   // Positive: with Sniper's Trance, waiting accumulates stacks (+1 range, +10 damage, no LOS)
@@ -292,29 +292,29 @@ test("3. Blood Bullet -> Sniper's Trance stacks range & damage on wait, ignores 
   assert.equal(cast(g, bb, farWalled), false); // out of range AND blocked by wall
 
   assert.ok(wait(g)); // 1 stack: range 11, damage 20, no LOS
-  assert.equal(effectiveRw3Spell(g, 10).range, 11);
-  assert.equal(effectiveRw3Spell(g, 10).damage, 20);
-  assert.equal(effectiveRw3Spell(g, 10).requiresLos, false);
+  assert.equal(effectiveSpell(g, 10).range, 11);
+  assert.equal(effectiveSpell(g, 10).damage, 20);
+  assert.equal(effectiveSpell(g, 10).requiresLos, false);
 
   assert.ok(wait(g)); // 2 stacks: range 12, damage 30, no LOS
-  assert.equal(effectiveRw3Spell(g, 10).range, 12);
-  assert.equal(effectiveRw3Spell(g, 10).damage, 30);
+  assert.equal(effectiveSpell(g, 10).range, 12);
+  assert.equal(effectiveSpell(g, 10).damage, 30);
 
   // Failed move into a wall does NOT clear stacks
   g.tiles[10][3] = 1;
   assert.equal(move(g, 0, -1), false);
-  assert.equal(effectiveRw3Spell(g, 10).damage, 30);
+  assert.equal(effectiveSpell(g, 10).damage, 30);
 
   // Casting through wall succeeds and deals 30 damage without clearing stacks
   assert.ok(cast(g, bb, farWalled));
   assert.equal(farWalled.hp, 170);
-  assert.equal(effectiveRw3Spell(g, 10).damage, 30);
+  assert.equal(effectiveSpell(g, 10).damage, 30);
 
   // Stepping to an open tile clears ALL stacks and restores LOS requirement
   assert.ok(move(g, 0, 1));
-  assert.equal(effectiveRw3Spell(g, 10).range, 10);
-  assert.equal(effectiveRw3Spell(g, 10).damage, 10);
-  assert.equal(effectiveRw3Spell(g, 10).requiresLos, true);
+  assert.equal(effectiveSpell(g, 10).range, 10);
+  assert.equal(effectiveSpell(g, 10).damage, 10);
+  assert.equal(effectiveSpell(g, 10).requiresLos, true);
   // Put wall back on new sightline and verify cast is blocked again
   g.tiles[12][5] = 1;
   const walledAgain = addEnemy(g, 7, 12, { hp: 200, maxHp: 200, resistances: {} });
@@ -451,8 +451,8 @@ test("4. Glasya's Bite inflicts bleed on realm entry equal to Blood mastery * Ch
   assert.ok(nonMirrors.length > 0);
   assert.ok(nonMirrors.every(e => e.statuses.bleed === 10));
 
-  // Deployment timing in rw3 mode: not applied until deploy()
-  const gDeploy = arena('rw3');
+  // Deployment timing in classic mode: not applied until deploy()
+  const gDeploy = arena('classic');
   gDeploy.equipment.Trinket = { name: "Glasya's Bite", components: [] };
   learn(gDeploy, 'Blood Bullet'); // Blood 1
   learn(gDeploy, 'Annihilate'); // Chaos 2 -> product 2

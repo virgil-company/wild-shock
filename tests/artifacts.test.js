@@ -10,29 +10,29 @@ function arena() {
 }
 const enemy = (extra = {}) => ({ id: 1, x: 6, y: 11, hp: 100, maxHp: 100, damage: 1, range: 1, school: 5, name: 'Dummy', shields: 0, resistances: {}, statuses: {}, ...extra });
 
-test('RW3 transmutation shrine requires proximity and component, consumes turns and stops after three uses', () => {
+test('transmutation shrine requires proximity and component, consumes turns and stops after three uses', () => {
   const g = arena();
   g.shrine = { x: 4, y: 11, type: 'transmutation', uses: 3 };
-  g.rw3Components = ['Arcane Mote', 'Burning Ember'];
-  for (let i = 0; i < 3; i++) assert.ok(useShrine(g, { component: g.rw3Components[0] }));
+  g.components = ['Arcane Mote', 'Burning Ember'];
+  for (let i = 0; i < 3; i++) assert.ok(useShrine(g, { component: g.components[0] }));
   assert.equal(g.turn, 3);
-  assert.equal(g.rw3Components.length, 2);
-  assert.equal(useShrine(g, { component: g.rw3Components[0] }), false);
+  assert.equal(g.components.length, 2);
+  assert.equal(useShrine(g, { component: g.components[0] }), false);
   g.shrine = { x: 10, y: 11, type: 'transmutation', uses: 3 };
-  assert.equal(useShrine(g, { component: g.rw3Components[0] }), false);
-  g.shrine.x = 4; g.rw3Components = [];
+  assert.equal(useShrine(g, { component: g.components[0] }), false);
+  g.shrine.x = 4; g.components = [];
   assert.equal(useShrine(g, {}), false);
 });
 
-test('RW3 components can be collected and all realm props spawn on unique reachable tiles', () => {
-  const g = arena(); g.items = [{ x: 4, y: 11, type: 'rw3-component', name: 'Elemental Ice' }];
+test('components can be collected and all realm props spawn on unique reachable tiles', () => {
+  const g = arena(); g.items = [{ x: 4, y: 11, type: 'component', name: 'Elemental Ice' }];
   move(g, 1, 0);
-  assert.ok(g.rw3Components.includes('Elemental Ice'));
+  assert.ok(g.components.includes('Elemental Ice'));
   assert.equal(g.items.length, 0);
   for (let seed = 0; seed < 40; seed++) {
     const realm = createGame(seed), props = [...realm.items, ...realm.enemies, ...realm.portals, realm.shrine];
     assert.equal(new Set(props.map(p => `${p.x},${p.y}`)).size, props.length);
-    assert.ok(realm.items.every(i => i.type !== 'component')); // Old spark/ember/crystal removed
+    assert.ok(realm.items.every(i => !i.material)); // Old spark/ember/crystal removed
     const queue = [realm.player], seen = new Set([`${realm.player.x},${realm.player.y}`]);
     for (let i = 0; i < queue.length; i++) for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
       const x = queue[i].x + dx, y = queue[i].y + dy, key = `${x},${y}`;
@@ -48,7 +48,7 @@ test('portal previews match generated destinations and never mutate the active g
     const before = serialize(g), preview = previewPortal(g, theme); assert.equal(serialize(g), before);
     const next = restore(before); next.realm++; next.theme = theme; generateRealm(next);
     assert.equal(preview.enemies, next.enemies.length); assert.equal(preview.boss, true);
-    assert.deepEqual(preview.rw3Components, next.items.filter(i => i.type === 'rw3-component').map(i => i.name));
+    assert.deepEqual(preview.components, next.items.filter(i => i.type === 'component').map(i => i.name));
   }
   g.realm = 24; assert.ok(previewPortal(g, 0));
   g.realm = FINAL_REALM - 1; assert.ok(previewPortal(g, 1));
@@ -67,7 +67,7 @@ test('attack zones respect walls, range and next-turn incapacitation', () => {
 test('legacy saves migrate cleanly and invalid shrine/component data is rejected', () => {
   const legacy = createGame(12); delete legacy.shrine;
   const loaded = restore(JSON.stringify(legacy)); assert.ok(loaded); assert.equal(loaded.shrine, null);
-  for (const patch of [{ rw3Components: ['Nonexistent'] }, { shrine: { x: 999, y: 0, uses: 3 } }]) {
+  for (const patch of [{ components: ['Nonexistent'] }, { shrine: { x: 999, y: 0, uses: 3 } }]) {
     assert.equal(restore(JSON.stringify({ ...loaded, ...patch })), null);
   }
 });

@@ -2,15 +2,15 @@ import { componentName, equipmentName } from '../i18n/game-text.js';
 import { t } from '../i18n/i18n.js';
 import {
   SIZE, availableSpells, cast, createGame, deploy, distance, drink, forge,
-  learnRw3Spell, move, rerollRifts, shortestPath, useShrine, wait,
+  learnSpell, move, rerollRifts, shortestPath, useShrine, wait,
 } from '../engine/index.js';
 import {
   canForge, componentByName, equipmentByName, findMatchingComponents, getEquipmentModifiers,
-} from '../rules/rw3.js';
+} from '../rules/core.js';
 import { $ } from './dom.js';
 import {
-  renderBestiary, renderForgeSidebar, renderInspection, renderRw3ForgeView,
-  renderRw3Grimoire, renderShrineResult, showRw3SpellDetail, showUnit, showWardrobe,
+  renderBestiary, renderForgeSidebar, renderInspection, renderForgeView,
+  renderGrimoire, renderShrineResult, showSpellDetail, showUnit, showWardrobe,
 } from './views.js';
 
 export function bindInput(canvas, state, controllers) {
@@ -92,26 +92,26 @@ export function bindInput(canvas, state, controllers) {
     render();
   };
 
-  $('rw3-spell-search').oninput = $('rw3-tag-filter').onchange = $('rw3-level-filter').onchange = $('rw3-status-filter').onchange = () => renderRw3Grimoire(state);
-  $('rw3-spell-grid').onclick = event => {
-    const learnBtn = event.target.closest('[data-learn-rw3]');
-    if (learnBtn && !learnBtn.disabled) { if (learnRw3Spell(state.game, Number(learnBtn.dataset.learnRw3))) render(); return; }
-    const inspectBtn = event.target.closest('[data-inspect-rw3]');
-    if (inspectBtn) showRw3SpellDetail(state, Number(inspectBtn.dataset.inspectRw3), render);
+  $('spell-search').oninput = $('tag-filter').onchange = $('level-filter').onchange = $('status-filter').onchange = () => renderGrimoire(state);
+  $('spell-grid').onclick = event => {
+    const learnBtn = event.target.closest('[data-learn-spell]');
+    if (learnBtn && !learnBtn.disabled) { if (learnSpell(state.game, Number(learnBtn.dataset.learnSpell))) render(); return; }
+    const inspectBtn = event.target.closest('[data-inspect-spell]');
+    if (inspectBtn) showSpellDetail(state, Number(inspectBtn.dataset.inspectSpell), render);
   };
 
-  $('rw3-eq-search').oninput = $('rw3-slot-filter').onchange = $('rw3-eq-status-filter').onchange = () => renderRw3ForgeView(state);
-  $('rw3-eq-grid').onclick = event => {
-    const btn = event.target.closest('[data-forge-rw3]');
+  $('eq-search').oninput = $('slot-filter').onchange = $('eq-status-filter').onchange = () => renderForgeView(state);
+  $('eq-grid').onclick = event => {
+    const btn = event.target.closest('[data-forge-item]');
     if (!btn || btn.disabled) return;
-    const name = btn.dataset.forgeRw3;
+    const name = btn.dataset.forgeItem;
     const item = equipmentByName.get(name);
-    const chosen = findMatchingComponents(state.game.rw3Components, item);
+    const chosen = findMatchingComponents(state.game.components, item);
     if (!chosen) return;
     const list = $('ingredient-choices');
     $('ingredient-title').textContent = equipmentName(name);
     $('ingredient-recipe').textContent = item.recipe.map(([tag, count]) => count + ' × ' + tag).join(' + ');
-    const options = [...new Set(state.game.rw3Components)];
+    const options = [...new Set(state.game.components)];
     list.replaceChildren(...Array.from({ length: item.recipe_cost }, (_, i) => {
       const select = document.createElement('select');
       select.setAttribute('aria-label', t('forge.ingredient', { n: i + 1 }));

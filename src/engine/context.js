@@ -1,5 +1,5 @@
 import { CLOUD_TYPES, getModeConfig } from '../data/constants.js';
-import { effectiveRw3Spell, getEquipmentModifiers, knownSpellIds } from '../rules/rw3.js';
+import { effectiveSpell, getEquipmentModifiers, knownSpellIds } from '../rules/core.js';
 import { isPassable } from './grid.js';
 
 const endTurnState = new WeakSet();
@@ -90,7 +90,7 @@ export function availableSpells(game) {
   const mods = getEquipmentModifiers(game);
   const result = [];
   for (const id of knownSpellIds(game)) {
-    const eff = effectiveRw3Spell(game, id, mods);
+    const eff = effectiveSpell(game, id, mods);
     if (eff) result.push(eff);
   }
   return result;

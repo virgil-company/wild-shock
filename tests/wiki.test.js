@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { locales } from '../src/i18n/i18n.js';
-import { rw3Components, rw3Equipment, rw3Spells, rw3Units } from '../src/data/rw3-catalog.js';
+import { components, equipment, spells, units } from '../src/data/catalog.js';
 import { SHRINE_TYPES, CLOUD_TYPES } from '../src/data/constants.js';
 import {
   WIKI_CATEGORIES, classifyUnitRole, filterWikiEntries,
@@ -13,10 +13,10 @@ import { cloudIconSvg, componentIconSvg, shrineIconSvg, tagIconSvg, unitIconSvg 
 test('wiki datasets cover every unit, spell, equipment, component, and world resource', () => {
   const ds = getWikiDatasets();
   assert.deepEqual(Object.keys(ds), WIKI_CATEGORIES);
-  assert.equal(ds.monsters.length + ds.bosses.length + ds.companions.length, rw3Units.length);
-  assert.equal(ds.spells.length, rw3Spells.length);
-  assert.equal(ds.equipment.length, rw3Equipment.length);
-  assert.ok(ds.items.length >= rw3Components.length + 12);
+  assert.equal(ds.monsters.length + ds.bosses.length + ds.companions.length, units.length);
+  assert.equal(ds.spells.length, spells.length);
+  assert.equal(ds.equipment.length, equipment.length);
+  assert.ok(ds.items.length >= components.length + 12);
   assert.ok(ds.world.length >= SHRINE_TYPES.length + Object.keys(CLOUD_TYPES).length);
   assert.equal(totalWikiEntries(), WIKI_CATEGORIES.reduce((s, c) => s + ds[c].length, 0));
 });
@@ -61,8 +61,8 @@ test('wiki.html i18n attributes exist in all locales and SVG icon builders succe
   for (const [locale, messages] of Object.entries(locales)) {
     for (const key of keys) assert.ok(Object.hasOwn(messages, key), `${locale}: ${key}`);
   }
-  for (const u of rw3Units) assert.match(unitIconSvg(u, 24), /^<svg /);
-  for (const c of rw3Components) assert.match(componentIconSvg(c, 24), /^<svg /);
+  for (const u of units) assert.match(unitIconSvg(u, 24), /^<svg /);
+  for (const c of components) assert.match(componentIconSvg(c, 24), /^<svg /);
   for (const s of SHRINE_TYPES) assert.match(shrineIconSvg(s, 24), /^<svg /);
   for (const c of Object.values(CLOUD_TYPES)) assert.match(cloudIconSvg(c.color, 24), /^<svg /);
   for (const tg of ['Construct', 'Demon', 'Glass', 'Living', 'Spider', 'Undead', 'Physical', 'Poison']) {

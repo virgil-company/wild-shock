@@ -1,6 +1,6 @@
 import { DEBUFF_STATUSES, SIZE } from '../data/constants.js';
 import { getUnitMeta, unitStats, units } from '../data/bestiary.js';
-import { computeElementalDamage, equipmentByName } from '../rules/rw3.js';
+import { computeElementalDamage, equipmentByName } from '../rules/core.js';
 import { enemyNameKey, textRef } from '../i18n/text-keys.js';
 import { areaCells, canStand, distance, findOpenTileNear, hasSight } from './grid.js';
 import {
@@ -100,7 +100,7 @@ export function damageEnemy(game, enemy, amount, damageType = null, pierce = 0, 
     }
   }
 
-  // Fire or Physical hit breaks freeze (RW3 shatter interaction)
+  // Fire or Physical hit breaks freeze (shatter interaction)
   if ((damageType === 'Fire' || damageType === 'Physical') && enemy.statuses?.freeze > 0) {
     enemy.statuses.freeze = 0;
   }

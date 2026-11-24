@@ -363,7 +363,7 @@ export function resolveSpellEffect(game, spell, target, api) {
       if (chosen) {
         for (const [stat, n] of Object.entries(chosen.stats)) {
           if (n > 0 && stat !== 'hp_cost') {
-            game.buffs.push({ name, type: 'bonus', spellId: chosen.rw3Id, stat, percent: true, amount: spell.hpCost, duration });
+            game.buffs.push({ name, type: 'bonus', spellId: chosen.spellId, stat, percent: true, amount: spell.hpCost, duration });
           }
         }
       }

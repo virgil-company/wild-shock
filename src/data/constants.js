@@ -35,13 +35,13 @@ export const SHRINE_TYPES = [
 ];
 
 export const GAME_MODES = {
-  standard: { id: 'standard', finalRealm: 100, potions: true, allowedTags: null, enemyHpMult: 1, startPoints: 12, starterRw3: [101, 61, 95] },
-  rw3: { id: 'rw3', finalRealm: 21, potions: false, allowedTags: null, enemyHpMult: 1, startPoints: 14, starterRw3: [101, 61] },
-  'trial-pyromancer': { id: 'trial-pyromancer', finalRealm: 21, potions: false, allowedTags: ['Fire'], enemyHpMult: 1, startPoints: 14, starterRw3: [61] },
-  'trial-necromancer': { id: 'trial-necromancer', finalRealm: 21, potions: false, allowedTags: ['Dark', 'Blood'], enemyHpMult: 1, startPoints: 14, starterRw3: [29] },
-  'trial-stormcaller': { id: 'trial-stormcaller', finalRealm: 21, potions: false, allowedTags: ['Lightning', 'Ice'], enemyHpMult: 1, startPoints: 14, starterRw3: [95] },
-  'trial-conjurer': { id: 'trial-conjurer', finalRealm: 21, potions: false, allowedTags: ['Conjuration'], enemyHpMult: 1, startPoints: 14, starterRw3: [184] },
-  'trial-ironman': { id: 'trial-ironman', finalRealm: 21, potions: false, allowedTags: null, enemyHpMult: 1.5, startPoints: 16, starterRw3: [101] },
+  standard: { id: 'standard', finalRealm: 100, potions: true, allowedTags: null, enemyHpMult: 1, startPoints: 12, starterSpells: [101, 61, 95] },
+  classic: { id: 'classic', finalRealm: 21, potions: false, allowedTags: null, enemyHpMult: 1, startPoints: 14, starterSpells: [101, 61] },
+  'trial-pyromancer': { id: 'trial-pyromancer', finalRealm: 21, potions: false, allowedTags: ['Fire'], enemyHpMult: 1, startPoints: 14, starterSpells: [61] },
+  'trial-necromancer': { id: 'trial-necromancer', finalRealm: 21, potions: false, allowedTags: ['Dark', 'Blood'], enemyHpMult: 1, startPoints: 14, starterSpells: [29] },
+  'trial-stormcaller': { id: 'trial-stormcaller', finalRealm: 21, potions: false, allowedTags: ['Lightning', 'Ice'], enemyHpMult: 1, startPoints: 14, starterSpells: [95] },
+  'trial-conjurer': { id: 'trial-conjurer', finalRealm: 21, potions: false, allowedTags: ['Conjuration'], enemyHpMult: 1, startPoints: 14, starterSpells: [184] },
+  'trial-ironman': { id: 'trial-ironman', finalRealm: 21, potions: false, allowedTags: null, enemyHpMult: 1.5, startPoints: 16, starterSpells: [101] },
 };
 
 export const mancerTrials = {
@@ -52,10 +52,10 @@ export const mancerTrials = {
 
 for (const [name, [tag, id]] of Object.entries(mancerTrials)) {
   const mode = 'trial-' + name;
-  GAME_MODES[mode] = { ...GAME_MODES.rw3, id: mode, allowedTags: [tag], starterRw3: [id] };
+  GAME_MODES[mode] = { ...GAME_MODES.classic, id: mode, allowedTags: [tag], starterSpells: [id] };
 }
 for (const mode of ['weekly', 'custom', 'mutated', 'trial-scavenger', 'trial-improviser']) {
-  GAME_MODES[mode] = { ...GAME_MODES.rw3, id: mode };
+  GAME_MODES[mode] = { ...GAME_MODES.classic, id: mode };
 }
 
 export function getModeConfig(mode) {

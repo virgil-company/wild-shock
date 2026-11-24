@@ -4,11 +4,11 @@ import { nodeMap, spellInfo } from '../data/catalog.js';
 import { enhanceSpell } from '../data/artifacts.js';
 import { namedKey, textRef } from '../i18n/text-keys.js';
 import {
-  addComponent, canLearnRw3Spell, canLearnRw3Upgrade, componentByName,
-  effectiveRw3Spell, equipItem, equipmentByName, forge as forgeEquipment,
-  getEquipmentModifiers, getSpellUpgradeId, knownSpellIds, rw3Tags,
+  addComponent, canLearnSpell, canLearnUpgrade, componentByName,
+  effectiveSpell, equipItem, equipmentByName, forge as forgeEquipment,
+  getEquipmentModifiers, getSpellUpgradeId, knownSpellIds, tags,
   spellById, spellByName, tagMastery, transmutationChoices,
-} from '../rules/rw3.js';
+} from '../rules/core.js';
 import { equipmentEvent } from '../rules/equipment-effects.js';
 import { resolvePickup } from '../rules/component-effects.js';
 import { canStand, covers, distance, findOpenTileNear, hasSight, isPassable, isTileOccupied, onSegment, random } from './grid.js';
@@ -19,7 +19,7 @@ import {
 } from './context.js';
 import { applyStatus, cleanup, damageEnemy, damagePlayer } from './combat.js';
 import { allyTurn, convertEnemy, enemyTurn, recruitCompanion, spawnAlly, summonCreature, tickAllies } from './units.js';
-import { cancelChannel, freeCast, releaseChannel, resolveRw3Cast } from './spells.js';
+import { cancelChannel, freeCast, releaseChannel, resolveSpellCast } from './spells.js';
 import { addEquipmentRift, generateRealm } from './world.js';
 
 const activeItemEvents = new WeakMap();
@@ -54,7 +54,7 @@ export function equipmentAction(game, event, extra = {}) {
       roll: a => pick(a, rng),
       spells,
       mastery: tag => tagMastery(game, tag),
-      spellInfo: name => effectiveRw3Spell(game, spellByName.get(name)?.id),
+      spellInfo: name => effectiveSpell(game, spellByName.get(name)?.id),
       dist: distance,
       see: (a, b) => hasSight(game, a, b),
       act: a => allyTurn(game, a),
@@ -69,7 +69,7 @@ export function equipmentAction(game, event, extra = {}) {
       giveUpgrade: s => {
         if (!s) return;
         const u = pick(s.upgrades.filter(u => !s.learnedUpgrades.includes(u.sp_id)), rng);
-        if (u) (game.rw3Upgrades[s.rw3Id] ??= []).push(u.sp_id);
+        if (u) (game.spellUpgrades[s.spellId] ??= []).push(u.sp_id);
       },
     };
     try { equipmentEvent(event, game, item, copy, context); }
@@ -91,7 +91,7 @@ export function collectItem(game, item) {
     recruitCompanion(game, item.name, item.name);
   } else if (item.type === 'scroll' || item.type === 'chest') {
     game.pendingReward = { type: item.type, options: [...item.options] };
-  } else if (item.type === 'rw3-component') {
+  } else if (item.type === 'component') {
     addComponent(game, item.name);
     log(game, 'log.collected', { item: textRef(namedKey('components', item.name)) }, 'gold');
     applyComponentPickupEffects(game, item.name);
@@ -124,7 +124,7 @@ export function applyComponentPickupEffects(game, name, repeat) {
     convert: e => convertEnemy(game, e),
     cloud: (e, type, dur, n) => addCloud(game, e.x, e.y, type, dur, n),
     relocate: () => {
-      const item = pick(game.items.filter(i => i.type === 'shard' || i.type === 'rw3-component'), rng);
+      const item = pick(game.items.filter(i => i.type === 'shard' || i.type === 'component'), rng);
       if (item) collectItem(game, item);
     },
   }, !!repeat);
@@ -301,7 +301,7 @@ export function endTurn(game) {
     if (game.enemies.some(e => e.statuses.freeze > 0 || e.statuses.refreezing > 0)) {
       const freeze = spellByName.get('Freeze');
       const frostbiteId = getSpellUpgradeId(freeze, 'Frostbite');
-      const damage = frostbiteId != null && game.rw3Upgrades[freeze.id]?.includes(frostbiteId) ? effectiveRw3Spell(game, freeze.id).damage : 0;
+      const damage = frostbiteId != null && game.spellUpgrades[freeze.id]?.includes(frostbiteId) ? effectiveSpell(game, freeze.id).damage : 0;
       for (const e of game.enemies) {
         if (e.statuses.refreezing > 0) e.statuses.freeze = Math.max(e.statuses.freeze || 0, e.statuses.refreezing--);
         if (damage && e.statuses.freeze) { damageEnemy(game, e, damage, 'Ice'); damageEnemy(game, e, damage, 'Dark'); }
@@ -327,8 +327,8 @@ export function endTurn(game) {
     if (game.player.hp > 0 && game.damagedPlayerBy?.turn === currentTurnId(game) && game.damagedPlayerBy.ids.length) {
       const psBase = spellByName.get('Poison Sting');
       const rebukeId = getSpellUpgradeId(psBase, 'Stinging Rebuke');
-      if (rebukeId != null && knownSpellIds(game).includes(psBase.id) && game.rw3Upgrades[psBase.id]?.includes(rebukeId)) {
-        const ps = effectiveRw3Spell(game, psBase.id);
+      if (rebukeId != null && knownSpellIds(game).includes(psBase.id) && game.spellUpgrades[psBase.id]?.includes(rebukeId)) {
+        const ps = effectiveSpell(game, psBase.id);
         const cap = Math.max(1, ps.stats.num_targets || 2);
         const attackerIds = new Set(game.damagedPlayerBy.ids);
         const targets = game.enemies.filter(e => e.hp > 0 && attackerIds.has(e.id) && hasSight(game, game.player, e)).slice(0, cap);
@@ -424,7 +424,7 @@ export function wait(game) {
       game.effects = [];
       const allyTarget = spell.name === 'Temporal Transfusion' ? game.allies.find(a => a.id === game.channel.targetId) : null;
       if (spell.name === 'Temporal Transfusion' && !allyTarget) { cancelChannel(game); endTurn(game); return true; }
-      resolveRw3Cast(game, spell, allyTarget || game.channel.target, false);
+      resolveSpellCast(game, spell, allyTarget || game.channel.target, false);
       if (!game.channel) { cleanup(game); endTurn(game); return true; }
       game.channel.turnsLeft--;
       if (game.channel.turnsLeft <= 0) {
@@ -462,7 +462,7 @@ export function wait(game) {
   // Blood Bullet -> Sniper's Trance stacks when passing the turn.
   const bulletBase = spellByName.get('Blood Bullet');
   const tranceId = getSpellUpgradeId(bulletBase, "Sniper's Trance");
-  if (tranceId != null && knownSpellIds(game).includes(bulletBase.id) && game.rw3Upgrades[bulletBase.id]?.includes(tranceId)) {
+  if (tranceId != null && knownSpellIds(game).includes(bulletBase.id) && game.spellUpgrades[bulletBase.id]?.includes(tranceId)) {
     const existing = game.buffs.find(b => b.type === 'sniper');
     if (existing) existing.stacks = (existing.stacks || 0) + 1;
     else game.buffs.push({ name: "Sniper's Trance", type: 'sniper', stacks: 1, duration: -1 });
@@ -513,32 +513,32 @@ export function learn(game, id) {
   return true;
 }
 
-export function learnRw3Spell(game, spellId) {
-  if (!canLearnRw3Spell(game, spellId)) return false;
+export function learnSpell(game, spellId) {
+  if (!canLearnSpell(game, spellId)) return false;
   const base = spellById.get(spellId);
   game.points -= base.level;
   game.progress.pointsSpent += base.level;
-  game.rw3Spells ??= [];
-  game.rw3Spells.push(spellId);
-  const eff = effectiveRw3Spell(game, spellId);
+  game.spells ??= [];
+  game.spells.push(spellId);
+  const eff = effectiveSpell(game, spellId);
   game.charges[eff.id] = eff.maxCharges;
-  log(game, 'log.learnedRw3', { spell: base.name }, 'gold');
+  log(game, 'log.learnedSpell', { spell: base.name }, 'gold');
   return true;
 }
 
-export function learnRw3Upgrade(game, spellId, spId) {
-  if (!canLearnRw3Upgrade(game, spellId, spId)) return false;
+export function learnUpgrade(game, spellId, spId) {
+  if (!canLearnUpgrade(game, spellId, spId)) return false;
   const base = spellById.get(spellId);
   const upgrade = base.upgrades.find(u => u.sp_id === spId);
-  const previousCapacity = effectiveRw3Spell(game, spellId).maxCharges;
+  const previousCapacity = effectiveSpell(game, spellId).maxCharges;
   game.points -= upgrade.level;
   game.progress.pointsSpent += upgrade.level;
-  game.rw3Upgrades ??= {};
-  game.rw3Upgrades[spellId] ??= [];
-  game.rw3Upgrades[spellId].push(spId);
-  const eff = effectiveRw3Spell(game, spellId);
+  game.spellUpgrades ??= {};
+  game.spellUpgrades[spellId] ??= [];
+  game.spellUpgrades[spellId].push(spId);
+  const eff = effectiveSpell(game, spellId);
   game.charges[eff.id] = Math.max(0, Math.min(eff.maxCharges, (game.charges[eff.id] || 0) + eff.maxCharges - previousCapacity));
-  log(game, 'log.upgradedRw3', { spell: base.name, upgrade: upgrade.name }, 'gold');
+  log(game, 'log.upgradedSpell', { spell: base.name, upgrade: upgrade.name }, 'gold');
   return true;
 }
 
@@ -557,14 +557,14 @@ export function useShrine(game, options = {}) {
   if (game.status !== 'playing' || game.deploying || game.pendingReward || !game.shrine?.uses || distance(game.player, game.shrine) > 1) return false;
   const type = game.shrine.type || 'transmutation';
   if (type === 'transmutation') {
-    const source = options.component || game.rw3Components?.[0];
-    if (!source || !game.rw3Components.includes(source)) return false;
+    const source = options.component || game.components?.[0];
+    if (!source || !game.components.includes(source)) return false;
     const pool = transmutationChoices(source).map(c => c.name);
     if (!pool.length || (options.result && !pool.includes(options.result))) return false;
     const rng = random(game.seed + game.realm * 313 + game.turn * 97 + game.shrine.uses * 17);
     const result = options.result || pick(pool, rng);
-    game.rw3Components.splice(game.rw3Components.indexOf(source), 1);
-    game.rw3Components.push(result);
+    game.components.splice(game.components.indexOf(source), 1);
+    game.components.push(result);
     game.shrine.uses--;
     log(game, 'log.transmuted', { from: textRef(namedKey('components', source)), to: textRef(namedKey('components', result)) }, 'gold');
     endTurn(game);
@@ -573,20 +573,20 @@ export function useShrine(game, options = {}) {
   if (type === 'offering' || type === 'knowledge') {
     const name = options.component;
     const comp = componentByName.get(name);
-    if (!comp || !game.rw3Components.includes(name)) return false;
+    if (!comp || !game.components.includes(name)) return false;
     if (type === 'offering') {
       if (!comp.tags.includes(options.tag)) return false;
       game.offeringTags.push(options.tag);
     } else {
       const rng = random(game.seed + game.turn * 17 + game.realm);
-      const pool = availableSpells(game).flatMap(s => s.upgrades.filter(u => !s.learnedUpgrades.includes(u.sp_id)).map(u => [s.rw3Id, u.sp_id]));
+      const pool = availableSpells(game).flatMap(s => s.upgrades.filter(u => !s.learnedUpgrades.includes(u.sp_id)).map(u => [s.spellId, u.sp_id]));
       if (!pool.length) return false;
       for (let i = 0; i < (comp.rare && comp.on_craft ? 4 : 1) && pool.length; i++) {
         const [[id, upgrade]] = pool.splice(Math.floor(rng() * pool.length), 1);
-        (game.rw3Upgrades[id] ??= []).push(upgrade);
+        (game.spellUpgrades[id] ??= []).push(upgrade);
       }
     }
-    game.rw3Components.splice(game.rw3Components.indexOf(name), 1);
+    game.components.splice(game.components.indexOf(name), 1);
     game.shrine.uses--;
     endTurn(game);
     return true;
@@ -596,7 +596,7 @@ export function useShrine(game, options = {}) {
     const item = game.equipment[slot];
     if (!item?.components?.length) return false;
     const prev = availableSpells(game);
-    game.rw3Components.push(...item.components);
+    game.components.push(...item.components);
     delete game.equipment[slot];
     syncCharges(game, prev);
     game.shrine.uses--;
@@ -605,7 +605,7 @@ export function useShrine(game, options = {}) {
   }
   if (type === 'spellgraft') {
     const s = availableSpells(game).find(s => s.id === options.spellId);
-    if (!s || !rw3Tags.includes(options.tag) || s.tags.includes(options.tag)) return false;
+    if (!s || !tags.includes(options.tag) || s.tags.includes(options.tag)) return false;
     const previous = availableSpells(game);
     ((game.spellBoosts[s.id] ??= {}).tags ??= []).push(options.tag);
     syncCharges(game, previous);
@@ -622,9 +622,9 @@ export function useShrine(game, options = {}) {
     return true;
   }
   if (type === 'duplication') {
-    const targetComp = options.component || game.rw3Components?.[0];
-    if (!targetComp || !game.rw3Components.includes(targetComp)) return false;
-    game.rw3Components.push(targetComp);
+    const targetComp = options.component || game.components?.[0];
+    if (!targetComp || !game.components.includes(targetComp)) return false;
+    game.components.push(targetComp);
     game.shrine.uses--;
     log(game, 'log.shrineDuplicated', { item: textRef(namedKey('components', targetComp)) }, 'gold');
     endTurn(game);
@@ -669,10 +669,10 @@ export function claimReward(game, choice) {
   const reward = game.pendingReward;
   if (game.status !== 'playing' || !reward?.options.includes(choice)) return false;
   if (reward.type === 'scroll') {
-    if (!game.rw3Spells.includes(choice)) game.rw3Spells.push(choice);
-    const spell = effectiveRw3Spell(game, choice);
+    if (!game.spells.includes(choice)) game.spells.push(choice);
+    const spell = effectiveSpell(game, choice);
     game.charges[spell.id] = spell.maxCharges;
-    log(game, 'log.learnedRw3', { spell: spell.name }, 'gold');
+    log(game, 'log.learnedSpell', { spell: spell.name }, 'gold');
   } else {
     const item = equipmentByName.get(choice);
     if (!item) return false;

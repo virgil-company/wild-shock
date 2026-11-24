@@ -1,4 +1,4 @@
-import { rw3Equipment, rw3Spells, wardrobe } from './rw3-catalog.js';
+import { equipment, spells, wardrobe } from './catalog.js';
 import { pick } from './bestiary.js';
 
 export const vaults = {
@@ -15,7 +15,7 @@ export const vaults = {
 };
 
 const VAULT_COUNT = Object.keys(vaults).length;
-const spellByName = new Map(rw3Spells.map(s => [s.name, s]));
+const spellByName = new Map(spells.map(s => [s.name, s]));
 
 // Precompute equipment lists needed for win-unlock checks so outfitUnlocks avoids O(81 * 375) scans.
 const wardrobeMeta = wardrobe.map(entry => {
@@ -25,9 +25,9 @@ const wardrobeMeta = wardrobe.map(entry => {
   if (unlock?.startsWith('Win with a fully upgraded ')) {
     requiredSpell = spellByName.get(unlock.slice(26)) || null;
   } else if (unlock?.includes('every piece')) {
-    requiredItems = rw3Equipment.filter(e => e.name.includes(name)).map(e => e.name);
+    requiredItems = equipment.filter(e => e.name.includes(name)).map(e => e.name);
   } else if (unlock?.startsWith('Win while wearing ')) {
-    requiredItems = rw3Equipment.filter(item => unlock.includes(item.name)).map(e => e.name);
+    requiredItems = equipment.filter(item => unlock.includes(item.name)).map(e => e.name);
   }
   return { name, unlock, requiredItems, requiredSpell };
 });
@@ -82,7 +82,7 @@ export function outfitUnlocks(game) {
     } else if (name === 'Wizard Rift') {
       if (game.rerolledRealms?.length >= game.realm - 1) unlocked.push(name);
     } else if (requiredSpell) {
-      const owned = game.rw3Upgrades[requiredSpell.id];
+      const owned = game.spellUpgrades[requiredSpell.id];
       if (owned && requiredSpell.upgrades.every(u => owned.includes(u.sp_id))) unlocked.push(name);
     } else if (requiredItems?.length) {
       if (requiredItems.every(itemName => worn.has(itemName))) unlocked.push(name);

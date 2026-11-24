@@ -1,4 +1,4 @@
-import { componentByName } from './rw3.js';
+import { componentByName } from './core.js';
 import { pick } from '../data/bestiary.js';
 
 const RECURRING_INTERVALS = {
@@ -75,7 +75,7 @@ export function resolvePickup(game, name, api, repeated = false) {
     case 'Silver Dragonscale': resistance('Physical', 50); resistance('Ice', 100); break;
     case 'Umbral Resin': resistance('Dark', 100); resistance('Poison', 100); break;
     case 'Dragontongue Tablet': if (spells.some(s => s.tags.includes('Dragon'))) { game.points++; game.progress.pointsEarned++; } break;
-    case 'Mirror Stone': game.rw3Components.push(name); break;
+    case 'Mirror Stone': game.components.push(name); break;
     case 'Runed Vellum': for (const b of game.buffs) if (b.duration > 0) b.duration *= 3; break;
     case "Seer's Orb": buff('bonus', 10, { stat: 'range', amount: 6, noLos: true }); break;
     case 'Shimmersteel': for (const stat of ['range', 'damage']) buff('bonus', -1, { tag: 'Metallic', stat, amount: 100, percent: true }); break;

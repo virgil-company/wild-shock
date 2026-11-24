@@ -1,11 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  createGame, generateRealm, availableSpells, cast, move, wait, learnRw3Spell, learnRw3Upgrade,
+  createGame, generateRealm, availableSpells, cast, move, wait, learnSpell, learnUpgrade,
   applyComponentPickupEffects, deploy, claimReward, rerollRifts, previewPortal, forge, useShrine, restore, serialize, SIZE,
 } from '../src/engine/index.js';
-import { spellByName, findMatchingComponents, recipeMatches, rw3Equipment, rw3Components, effectiveRw3Spell, getUnitResistance } from '../src/rules/rw3.js';
-import { rw3Spells, rw3Units, wardrobe } from '../src/data/rw3-catalog.js';
+import { spellByName, findMatchingComponents, recipeMatches, equipment, components, effectiveSpell, getUnitResistance } from '../src/rules/core.js';
+import { spells, units as unitCatalog, wardrobe } from '../src/data/catalog.js';
 import { units, searchCatalogue, covers, unitStats } from '../src/data/bestiary.js';
 import { vaults, outfitUnlocks } from '../src/data/campaign.js';
 
@@ -22,18 +22,18 @@ function enemy(game, x, y, opts = {}) {
 }
 function learn(game, name, upgrades = []) {
   const s = spellByName.get(name);
-  if (!availableSpells(game).some(e => e.rw3Id === s.id)) assert.ok(learnRw3Spell(game, s.id), name);
-  for (const up of upgrades) assert.ok(learnRw3Upgrade(game, s.id, s.upgrades.find(u => u.name === up).sp_id));
-  return 'rw3-' + s.id;
+  if (!availableSpells(game).some(e => e.spellId === s.id)) assert.ok(learnSpell(game, s.id), name);
+  for (const up of upgrades) assert.ok(learnUpgrade(game, s.id, s.upgrades.find(u => u.name === up).sp_id));
+  return 'spell-' + s.id;
 }
 
 test('all spells and upgrades have unique purchase keys and all recipes match real ingredients', () => {
-  assert.equal(new Set(rw3Spells.map(s => s.id)).size, 198);
-  assert.ok(rw3Spells.every(s => Number.isInteger(s.id)));
-  assert.equal(new Set(rw3Spells.flatMap(s => s.upgrades.map(u => u.sp_id))).size, 797);
+  assert.equal(new Set(spells.map(s => s.id)).size, 198);
+  assert.ok(spells.every(s => Number.isInteger(s.id)));
+  assert.equal(new Set(spells.flatMap(s => s.upgrades.map(u => u.sp_id))).size, 797);
   assert.equal(units.size, 496); assert.equal(wardrobe.length, 81);
-  const pantry = rw3Components.flatMap(c => Array(16).fill(c.name));
-  for (const item of rw3Equipment) {
+  const pantry = components.flatMap(c => Array(16).fill(c.name));
+  for (const item of equipment) {
     const result = findMatchingComponents(pantry, item);
     assert.ok(result && recipeMatches(item, result), item.name);
     assert.ok(result.length <= item.recipe_cost);
@@ -45,14 +45,14 @@ test('all spells and upgrades have unique purchase keys and all recipes match re
 
 test('all 198 spells enter through the grimoire or their book, accept their upgrades and survive saving', () => {
   const g = arena();
-  for (const s of rw3Spells) {
+  for (const s of spells) {
     if (s.granted_by) {
-      const book = rw3Equipment.find(e => e.name === s.granted_by);
-      assert.equal(learnRw3Spell(g, s.id), false);
+      const book = equipment.find(e => e.name === s.granted_by);
+      assert.equal(learnSpell(g, s.id), false);
       g.equipment[book.slot] = { name: book.name, components: [] };
-    } else if (!g.rw3Spells.includes(s.id)) assert.ok(learnRw3Spell(g, s.id), s.name);
-    for (const u of s.upgrades) assert.ok(learnRw3Upgrade(g, s.id, u.sp_id), u.name);
-    const eff = effectiveRw3Spell(g, s.id);
+    } else if (!g.spells.includes(s.id)) assert.ok(learnSpell(g, s.id), s.name);
+    for (const u of s.upgrades) assert.ok(learnUpgrade(g, s.id, u.sp_id), u.name);
+    const eff = effectiveSpell(g, s.id);
     assert.ok(eff.upgradeNames.length === s.upgrades.length && Object.values(eff.stats).every(Number.isFinite));
   }
   assert.deepEqual(restore(serialize(g)), g);
@@ -61,9 +61,9 @@ test('all 198 spells enter through the grimoire or their book, accept their upgr
 test('forged books grant forbidden spells, initialize charges and remove access when replaced', () => {
   const g = arena();
   for (const name of ['Book of Life', 'Book of Ice']) {
-    const item = rw3Equipment.find(e => e.name === name);
-    g.rw3Components = rw3Components.flatMap(c => Array(8).fill(c.name));
-    assert.ok(forge(g, name, findMatchingComponents(g.rw3Components, item)));
+    const item = equipment.find(e => e.name === name);
+    g.components = components.flatMap(c => Array(8).fill(c.name));
+    assert.ok(forge(g, name, findMatchingComponents(g.components, item)));
     const s = availableSpells(g).find(s => spellByName.get(s.name).granted_by === name);
     assert.ok(s && g.charges[s.id] === s.maxCharges);
   }
@@ -120,17 +120,17 @@ test('Scavenger presents four distinct choices that survive reloading and can be
   assert.ok(move(g, 1, 0));
   const loaded = restore(serialize(g)); assert.deepEqual(loaded.pendingReward.options, item.options);
   assert.equal(wait(loaded), false); assert.equal(claimReward(loaded, -1), false);
-  assert.ok(claimReward(loaded, item.options[0])); assert.ok(loaded.rw3Spells.includes(item.options[0]));
+  assert.ok(claimReward(loaded, item.options[0])); assert.ok(loaded.spells.includes(item.options[0]));
   assert.equal(claimReward(loaded, item.options[0]), false);
 });
 
 test('haste, offering, knowledge and shared-tag transmutation enforce valid choices', () => {
   const g = arena(); const shrine = type => { g.shrine = { x: 4, y: 11, type, uses: 1 }; };
-  shrine('haste'); assert.ok(useShrine(g, { spellId: 'rw3-101' })); assert.ok(effectiveRw3Spell(g, 101).quickCast);
-  g.rw3Components = ['Burning Ember', 'Chimera Eyes', 'Arcane Mote'];
+  shrine('haste'); assert.ok(useShrine(g, { spellId: 'spell-101' })); assert.ok(effectiveSpell(g, 101).quickCast);
+  g.components = ['Burning Ember', 'Chimera Eyes', 'Arcane Mote'];
   shrine('offering'); assert.equal(useShrine(g, { component: 'Burning Ember', tag: 'Ice' }), false);
   assert.ok(useShrine(g, { component: 'Burning Ember', tag: 'Fire' })); assert.deepEqual(g.offeringTags, ['Fire']);
-  shrine('knowledge'); assert.ok(useShrine(g, { component: 'Chimera Eyes' })); assert.equal(Object.values(g.rw3Upgrades).flat().length, 4);
+  shrine('knowledge'); assert.ok(useShrine(g, { component: 'Chimera Eyes' })); assert.equal(Object.values(g.spellUpgrades).flat().length, 4);
   shrine('transmutation'); assert.equal(useShrine(g, { component: 'Arcane Mote', result: 'Burning Ember' }), false);
 });
 
@@ -138,7 +138,7 @@ test('components summon, restore limited charges, and apply timed effects accord
   const g = arena(), e = enemy(g, 6, 11);
   applyComponentPickupEffects(g, 'Ball Lightning');
   assert.equal(g.allies[0].name, 'Spark Spirit'); assert.ok(e.hp < 600);
-  applyComponentPickupEffects(g, 'Arcane Mote'); assert.equal(g.charges['rw3-101'], 20);
+  applyComponentPickupEffects(g, 'Arcane Mote'); assert.equal(g.charges['spell-101'], 20);
   applyComponentPickupEffects(g, 'Frostpetal'); g.player.hp -= 20;
   assert.equal(getUnitResistance(g.player, 'Ice', g), 75); wait(g); assert.equal(g.player.hp, 483);
   applyComponentPickupEffects(g, 'Lightning Jar'); const turn = g.turn;
@@ -147,7 +147,7 @@ test('components summon, restore limited charges, and apply timed effects accord
 
 test('all encounter footprints spawn inside the board with no overlapping units or props', () => {
   for (let seed = 1; seed <= 80; seed++) {
-    const g = createGame(seed, { mode: 'rw3' }); g.realm = seed % 20 + 1; generateRealm(g);
+    const g = createGame(seed, { mode: 'classic' }); g.realm = seed % 20 + 1; generateRealm(g);
     for (const e of g.enemies) {
       const r = e.radius || 0;
       assert.ok(e.x - r > 0 && e.y - r > 0 && e.x + r < SIZE - 1 && e.y + r < SIZE - 1);
@@ -157,21 +157,21 @@ test('all encounter footprints spawn inside the board with no overlapping units 
   }
   const g = arena(); g.defeatedSpecies = ['Mothgod']; g.clearedVaults = ['Goblins'];
   assert.ok(outfitUnlocks(g).includes('Moth')); assert.ok(outfitUnlocks(g).includes('Goblin'));
-  assert.equal(rw3Units.filter(u => u.boss_kind === 'final').length, 12);
+  assert.equal(unitCatalog.filter(u => u.boss_kind === 'final').length, 12);
 });
 
 test('all beta spells can resolve through cast and channel processing on a saved board', () => {
-  for (const base of rw3Spells) {
+  for (const base of spells) {
     const g = arena();
     const foe = enemy(g, 4, 11, { tags: ['Metallic', 'Living', 'Fire'], statuses: { freeze: 8 }, hp: 20, maxHp: 20 });
     enemy(g, 7, 11);
     g.allies.push({ ...unitStats(units.get('Wolf')), x: 3, y: 12, id: 'ally-test', tags: ['Metallic', 'Slime', 'Living'], duration: 0 });
     if (base.granted_by) {
-      const book = rw3Equipment.find(e => e.name === base.granted_by);
+      const book = equipment.find(e => e.name === base.granted_by);
       g.equipment[book.slot] = { name: book.name, components: [] };
-    } else if (!g.rw3Spells.includes(base.id)) g.rw3Spells.push(base.id);
-    g.rw3Upgrades[base.id] = base.upgrades.map(up => up.sp_id);
-    const spell = effectiveRw3Spell(g, base.id); g.charges[spell.id] = spell.maxCharges;
+    } else if (!g.spells.includes(base.id)) g.spells.push(base.id);
+    g.spellUpgrades[base.id] = base.upgrades.map(up => up.sp_id);
+    const spell = effectiveSpell(g, base.id); g.charges[spell.id] = spell.maxCharges;
     const candidates = [foe, g.allies[0], { x: 4, y: 12 }, { x: 4, y: 10 }, g.player];
     if (base.name === 'Volcanic Eruption') g.tiles[12][4] = 2;
     if (base.name === 'Shrapnel Blast') g.tiles[12][4] = 1;
@@ -187,7 +187,7 @@ test('all beta spells can resolve through cast and channel processing on a saved
 });
 
 test('all equipment definitions can enter a realm, receive a manual cast and take a turn', () => {
-  for (const item of rw3Equipment) {
+  for (const item of equipment) {
     const g = arena();
     g.equipment[item.slot] = { name: item.name, components: [] };
     generateRealm(g);
@@ -198,7 +198,7 @@ test('all equipment definitions can enter a realm, receive a manual cast and tak
 });
 
 test('realm 20 offers distinct bosses and Mordred retains the encounter through all three forms', () => {
-  const g = arena('rw3'); g.realm = 19;
+  const g = arena('classic'); g.realm = 19;
   const first = previewPortal(g, 0).species[0], second = previewPortal(g, 1).species[0];
   assert.notEqual(first, second);
   assert.equal(units.get(first).boss_kind, 'final'); assert.equal(units.get(second).boss_kind, 'final');
@@ -215,13 +215,13 @@ test('realm 20 offers distinct bosses and Mordred retains the encounter through 
 });
 
 test('Ophan redirects a hit, and a surviving Great Faery returns on deployment', () => {
-  const g = arena('rw3');
+  const g = arena('classic');
   const guard = enemy(g, 10, 12, { statuses: { stun: 5 } });
   const ophan = enemy(g, 7, 11, { ...unitStats(units.get('Ophan')), statuses: { stun: 5 } });
   const before = ophan.hp;
-  assert.ok(cast(g, 'rw3-101', ophan));
+  assert.ok(cast(g, 'spell-101', ophan));
   assert.equal(ophan.hp, before); assert.ok(guard.hp < 600);
-  const arriving = arena('rw3'); arriving.vault = 'the Fettered Fae';
+  const arriving = arena('classic'); arriving.vault = 'the Fettered Fae';
   arriving.allies.push({ ...unitStats(units.get('Fae Queen')), id: 'fae', x: 4, y: 13, name: 'Great Faery', rescue: true });
   enemy(arriving, 4, 11, { hp: 1 }); assert.ok(move(arriving, 1, 0));
   assert.deepEqual(arriving.companions, [{ name: 'Great Faery', species: 'Fae Queen' }]);
@@ -232,12 +232,12 @@ test('Ophan redirects a hit, and a surviving Great Faery returns on deployment',
 });
 
 test('multi-affinity components fill several slots and two pairs of boots can be worn and dismantled separately', () => {
-  const g = arena('rw3');
+  const g = arena('classic');
   assert.deepEqual(findMatchingComponents(['Ball Lightning'], { recipe_cost: 2, recipe: [['Orb', 1], ['Lightning', 1]] }), ['Ball Lightning']);
   assert.equal(recipeMatches({ recipe_cost: 2, recipe: [['Orb', 2]] }, ['Ball Lightning']), false);
   for (const name of ['Bishop Boots', 'Castellan Clogs']) {
-    g.rw3Components = rw3Components.map(c => c.name);
-    assert.ok(forge(g, name, findMatchingComponents(g.rw3Components, rw3Equipment.find(e => e.name === name))));
+    g.components = components.map(c => c.name);
+    assert.ok(forge(g, name, findMatchingComponents(g.components, equipment.find(e => e.name === name))));
   }
   assert.equal(Object.values(g.equipment).length, 2);
   assert.ok(move(g, 1, 1)); assert.deepEqual([g.player.x, g.player.y, g.turn], [5, 13, 1]);
@@ -251,16 +251,16 @@ test('Improviser restricts purchases and crafting reproducibly, and upgrades pre
   const g = createGame(47, { mode: 'trial-improviser' });
   assert.deepEqual(g.allowedSpells, createGame(47, { mode: 'trial-improviser' }).allowedSpells);
   assert.equal(g.allowedEquipment.length, 94); g.points = 50;
-  const excluded = rw3Spells.find(s => !s.granted_by && !g.allowedSpells.includes(s.id));
-  assert.equal(learnRw3Spell(g, excluded.id), false);
-  const item = rw3Equipment.find(e => !g.allowedEquipment.includes(e.name)); g.rw3Components = rw3Components.map(c => c.name);
-  assert.equal(forge(g, item.name, findMatchingComponents(g.rw3Components, item)), false);
+  const excluded = spells.find(s => !s.granted_by && !g.allowedSpells.includes(s.id));
+  assert.equal(learnSpell(g, excluded.id), false);
+  const item = equipment.find(e => !g.allowedEquipment.includes(e.name)); g.components = components.map(c => c.name);
+  assert.equal(forge(g, item.name, findMatchingComponents(g.components, item)), false);
   const up = spellByName.get('Magic Missile').upgrades.find(u => u.name === 'Arcane Crossfire');
-  g.charges['rw3-101'] = 4; assert.ok(learnRw3Upgrade(g, 101, up.sp_id)); assert.equal(g.charges['rw3-101'], 4);
+  g.charges['spell-101'] = 4; assert.ok(learnUpgrade(g, 101, up.sp_id)); assert.equal(g.charges['spell-101'], 4);
 });
 
 test('every bestiary species can take hostile and allied actions, then resolve its death rules', () => {
-  for (const def of rw3Units) {
+  for (const def of unitCatalog) {
     const game = arena();
     const foe = enemy(game, 13, 11, { ...unitStats(def) });
     game.allies.push({ ...unitStats(def), id: 'ally-species', x: 7, y: 11, duration: 0 });
@@ -273,11 +273,11 @@ test('every bestiary species can take hostile and allied actions, then resolve i
 });
 
 test('all component pickup effects resolve from the board and survive a turn', () => {
-  for (const component of rw3Components) {
+  for (const component of components) {
     const g = arena(); enemy(g, 9, 11); enemy(g, 12, 11);
-    g.items.push({ x: 4, y: 11, type: 'rw3-component', name: component.name });
+    g.items.push({ x: 4, y: 11, type: 'component', name: component.name });
     assert.ok(move(g, 1, 0), component.name);
-    assert.ok(g.rw3Components.includes(component.name), component.name);
+    assert.ok(g.components.includes(component.name), component.name);
     wait(g); assert.ok(restore(serialize(g)), component.name);
   }
 });

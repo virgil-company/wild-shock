@@ -1,6 +1,6 @@
 import { ENEMY_ARCHETYPES, SIZE, getModeConfig } from '../data/constants.js';
 import { getUnitMeta, pick, readyAttack, summonedBy, unitStats, units } from '../data/bestiary.js';
-import { equipmentByName, getSpellUpgradeId, knownSpellIds, spellByName } from '../rules/rw3.js';
+import { equipmentByName, getSpellUpgradeId, knownSpellIds, spellByName } from '../rules/core.js';
 import { enemyNameKey, textRef } from '../i18n/text-keys.js';
 import { areaCells, canStand, distance, findBestStepToward, findOpenTileNear, hasSight, isPassable, isTileOccupied, random, shortestPath } from './grid.js';
 import { equipped, log, maxHealth, withActionContext } from './context.js';
@@ -36,7 +36,7 @@ export function spawnAlly(game, pos, spec) {
     equipmentAction(game, 'summon', { ally });
     const clawBase = spellByName.get('Dragon Claw');
     const tutorUpId = getSpellUpgradeId(clawBase, 'Dragon Tutor');
-    if (tutorUpId != null && knownSpellIds(game).includes(clawBase.id) && game.rw3Upgrades[clawBase.id]?.includes(tutorUpId)) {
+    if (tutorUpId != null && knownSpellIds(game).includes(clawBase.id) && game.spellUpgrades[clawBase.id]?.includes(tutorUpId)) {
       const def = units.get(ally.species);
       if (ally.tags.includes('Dragon') && def && getUnitMeta(def).hasMelee) {
         ally.dragonTutor = true;

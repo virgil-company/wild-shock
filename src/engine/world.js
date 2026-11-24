@@ -2,9 +2,9 @@ import { SAVE_VERSION, SHRINE_TYPES, SIZE, getModeConfig } from '../data/constan
 import { companions, encounterTable, pick, realmBosses, unitStats, units } from '../data/bestiary.js';
 import { chooseMutators, vaults, weekSeed } from '../data/campaign.js';
 import {
-  componentByName, equipmentByName, getEquippedItems, getSpellUpgradeId,
-  knownSpellIds, rw3Equipment, rw3Spells, spellByName, tagMastery,
-} from '../rules/rw3.js';
+  componentByName, equipment, equipmentByName, getEquippedItems, getSpellUpgradeId,
+  knownSpellIds, spellByName, spells, tagMastery,
+} from '../rules/core.js';
 import { areaCells, distance, findOpenTileNear, isPassable, isTileOccupied, random, shortestPath } from './grid.js';
 import { availableSpells, awardPoints, finalRealmOf, log } from './context.js';
 import { cleanup } from './combat.js';
@@ -17,13 +17,13 @@ const allComponents = [...componentByName.values()];
 export function createGame(seed = Date.now() % 2147483647, { mode = 'standard', selectedMutators = [], now = Date.now() } = {}) {
   if (mode === 'weekly') seed = weekSeed(now);
   const cfg = getModeConfig(mode);
-  const isRw3Mode = cfg.id !== 'standard';
+  const isClassicMode = cfg.id !== 'standard';
   const game = {
     version: SAVE_VERSION, seed, mode: cfg.id, realm: 1, turn: 0, points: cfg.startPoints,
     learned: [],
-    rw3Spells: [...cfg.starterRw3], rw3Upgrades: {}, spellBoosts: {},
-    rw3Components: [], equipment: {},
-    player: { x: 3, y: 11, hp: 55, shield: 0, shields: isRw3Mode ? 2 : 0, resistances: {}, statuses: {} },
+    spells: [...cfg.starterSpells], spellUpgrades: {}, spellBoosts: {},
+    components: [], equipment: {},
+    player: { x: 3, y: 11, hp: 55, shield: 0, shields: isClassicMode ? 2 : 0, resistances: {}, statuses: {} },
     mutators: chooseMutators(mode, selectedMutators, random(seed)), vault: null, defeatedSpecies: [], clearedVaults: [],
     riftRoll: 0, rerolls: 1, rerolledRealms: [], pendingReward: null,
     offeringTags: [], realmTurn: 0, lastCast: null, lastEffect: null, damagedPlayerBy: null,
@@ -38,9 +38,9 @@ export function createGame(seed = Date.now() % 2147483647, { mode = 'standard', 
       const count = Math.ceil(pool.length / 4);
       return Array.from({ length: count }, () => pool.splice(Math.floor(rng() * pool.length), 1)[0]);
     };
-    const spells = quarter(rw3Spells.filter(s => !s.granted_by && !game.rw3Spells.includes(s.id)));
-    game.allowedSpells = [...game.rw3Spells, ...spells.map(s => s.id)];
-    game.allowedEquipment = quarter(rw3Equipment).map(e => e.name);
+    const poolSpells = quarter(spells.filter(s => !s.granted_by && !game.spells.includes(s.id)));
+    game.allowedSpells = [...game.spells, ...poolSpells.map(s => s.id)];
+    game.allowedEquipment = quarter(equipment).map(e => e.name);
   }
   generateRealm(game);
   log(game, 'log.start', {}, 'gold');
@@ -196,7 +196,7 @@ export function generateRealm(game) {
     const pool = allComponents.filter(c => c.tier <= tier && c.rare === rare);
     const favored = pool.filter(c => rewardTags.some(tag => c.tags.includes(tag)));
     const component = pick(favored.length && rng() < 0.6 ? favored : pool, rng);
-    game.items.push({ ...position(), type: 'rw3-component', name: component.name });
+    game.items.push({ ...position(), type: 'component', name: component.name });
   }
 
   if (game.vault === 'the Fettered Fae') {
@@ -210,8 +210,8 @@ export function generateRealm(game) {
     const known = new Set(knownSpellIds(game));
     for (const type of kinds) {
       const pool = type === 'scroll'
-        ? rw3Spells.filter(s => !s.granted_by && !known.has(s.id)).map(s => s.id)
-        : [...(game.allowedEquipment || rw3Equipment.map(e => e.name))];
+        ? spells.filter(s => !s.granted_by && !known.has(s.id)).map(s => s.id)
+        : [...(game.allowedEquipment || equipment.map(e => e.name))];
       const options = [];
       while (pool.length && options.length < (game.mode === 'trial-scavenger' ? 4 : 3)) {
         options.push(pool.splice(Math.floor(rng() * pool.length), 1)[0]);
@@ -235,9 +235,9 @@ export function generateRealm(game) {
 export function enterRealmEffects(game) {
   const drake = spellByName.get('Void Drake');
   const mutId = getSpellUpgradeId(drake, 'Void Mutations');
-  if (mutId != null && game.rw3Upgrades[drake.id]?.includes(mutId)) {
+  if (mutId != null && game.spellUpgrades[drake.id]?.includes(mutId)) {
     const mastery = tagMastery(game, 'Arcane');
-    const boost = game.spellBoosts['rw3-' + drake.id] ??= {};
+    const boost = game.spellBoosts['spell-' + drake.id] ??= {};
     boost.voidMutations = (boost.voidMutations || 0) + mastery;
   }
   for (const member of game.companions || []) {
@@ -330,12 +330,12 @@ export function previewPortal(game, destination) {
     riftAffinity: portal.affinity || null,
     mutators: [...(game.mutators || [])],
     offeringTags: [...(game.offeringTags || [])],
-    rw3Spells: [...(game.rw3Spells || [])],
-    rw3Upgrades: Object.fromEntries(Object.entries(game.rw3Upgrades || {}).map(([k, v]) => [k, [...v]])),
+    spells: [...(game.spells || [])],
+    spellUpgrades: Object.fromEntries(Object.entries(game.spellUpgrades || {}).map(([k, v]) => [k, [...v]])),
     spellBoosts: Object.fromEntries(Object.entries(game.spellBoosts || {}).map(([k, v]) => [k, { ...v, ...(v.tags ? { tags: [...v.tags] } : {}) }])),
     equipment: Object.fromEntries(Object.entries(game.equipment || {}).map(([k, v]) => [k, { ...v, components: [...(v.components || [])] }])),
     allowedEquipment: game.allowedEquipment ? [...game.allowedEquipment] : undefined,
-    rw3Components: [...(game.rw3Components || [])],
+    components: [...(game.components || [])],
     companions: (game.companions || []).map(c => ({ ...c })),
     points: game.points,
     bonusMaxHp: game.bonusMaxHp || 0,
@@ -352,7 +352,7 @@ export function previewPortal(game, destination) {
     vault: preview.vault,
     species: [...new Set(preview.enemies.map(e => e.name))],
     schools: [...new Set(preview.enemies.map(e => e.school))],
-    rw3Components: preview.items.filter(i => i.type === 'rw3-component').map(i => i.name),
+    components: preview.items.filter(i => i.type === 'component').map(i => i.name),
     shrine: preview.shrine?.type || 'transmutation',
   };
 }

@@ -1,6 +1,6 @@
 import { SIZE } from '../data/constants.js';
 import { pick, unitStats, units } from '../data/bestiary.js';
-import { effectiveRw3Spell, getEquipmentModifiers, spellByName } from '../rules/rw3.js';
+import { effectiveSpell, getEquipmentModifiers, spellByName } from '../rules/core.js';
 import { resolveSpellEffect } from '../rules/spell-effects.js';
 import { areaCells, canStand, covers, distance, findOpenTileNear, hasSight, isPassable, isTileOccupied, onSegment, random } from './grid.js';
 import { addCloud, availableSpells, equipped, log, maxHealth, withActionContext } from './context.js';
@@ -9,12 +9,12 @@ import { allyTurn, convertEnemy, spawnAlly, summonCreature, tickOrb } from './un
 import { endTurn, equipmentAction } from './actions.js';
 
 export function freeCast(game, name, target, options = {}) {
-  const spell = effectiveRw3Spell(game, spellByName.get(name)?.id);
+  const spell = effectiveSpell(game, spellByName.get(name)?.id);
   if (!spell || !target) return 0;
-  return resolveRw3Cast(game, spell, { x: target.x, y: target.y }, false, options);
+  return resolveSpellCast(game, spell, { x: target.x, y: target.y }, false, options);
 }
 
-export function resolveRw3Cast(game, spell, target, manual = true, options = {}) {
+export function resolveSpellCast(game, spell, target, manual = true, options = {}) {
   if (game.castCounterTurn !== game.turn) {
     game.castCounterTurn = game.turn;
     game.castCount = 0;
@@ -259,19 +259,19 @@ function applySpell(game, spell, target, manual, options = {}) {
     game.buffs ??= [];
     if (spell.tags.includes('Eye')) {
       game.buffs.push({
-        id: `eye-${spell.rw3Id}`, name: spell.name, type: 'eye',
+        id: `eye-${spell.spellId}`, name: spell.name, type: 'eye',
         damage: spell.damage || 12, damageType: primaryDmgType,
         shotCooldown: spell.stats.shot_cooldown || 3, timer: 1,
         duration: spell.duration || 20, healOnHit: spell.tags.includes('Blood'),
         status: /berserk/i.test(desc) ? 'berserk' : null, color: spell.color,
       });
     } else if (/ride drake|mounted/i.test(desc)) {
-      game.buffs.push({ id: `mount-${spell.rw3Id}`, name: spell.name, type: 'mount', flying: true, quickstep: true, duration: spell.duration || 10 });
+      game.buffs.push({ id: `mount-${spell.spellId}`, name: spell.name, type: 'mount', flying: true, quickstep: true, duration: spell.duration || 10 });
     } else if (/regeneration/i.test(spell.name)) {
-      game.buffs.push({ id: `regen-${spell.rw3Id}`, name: spell.name, type: 'regen', amount: 4, radius: spell.radius || 8, selfHeal: true, duration: spell.duration || 8 });
+      game.buffs.push({ id: `regen-${spell.spellId}`, name: spell.name, type: 'regen', amount: 4, radius: spell.radius || 8, selfHeal: true, duration: spell.duration || 8 });
     } else {
       for (const a of game.allies || []) a.damage += 4;
-      game.buffs.push({ id: `buff-${spell.rw3Id}`, name: spell.name, type: 'aura', damage: Math.max(3, spell.damage), damageType: primaryDmgType, radius: spell.radius || 3, duration: spell.duration || 8 });
+      game.buffs.push({ id: `buff-${spell.spellId}`, name: spell.name, type: 'aura', damage: Math.max(3, spell.damage), damageType: primaryDmgType, radius: spell.radius || 3, duration: spell.duration || 8 });
     }
     game.effects.push({ x: game.player.x, y: game.player.y, color: spell.color });
   } else if (spell.behavior === 'heal_allies') {
@@ -465,12 +465,12 @@ export function cast(game, spellId, target) {
     }
   }
   const origin = { x: game.player.x, y: game.player.y };
-  const hits = resolveRw3Cast(game, spell, effectiveTarget, true);
+  const hits = resolveSpellCast(game, spell, effectiveTarget, true);
   equipmentAction(game, 'cast', { spell, target: effectiveTarget, victim: unit, origin });
-  if (spell.tags.includes('Sorcery') && game.buffs.some(b => b.type === 'Multicast')) resolveRw3Cast(game, spell, effectiveTarget, false);
+  if (spell.tags.includes('Sorcery') && game.buffs.some(b => b.type === 'Multicast')) resolveSpellCast(game, spell, effectiveTarget, false);
   if (game.buffs.some(b => b.type === 'Death Cleave') && unit?.hp === 0) {
     const next = game.enemies.find(e => e.hp > 0 && distance(game.player, e) <= spell.range && hasSight(game, game.player, e));
-    if (next) resolveRw3Cast(game, spell, next, false);
+    if (next) resolveSpellCast(game, spell, next, false);
   }
   if (game.buffs.some(b => b.type === 'Flame Gate') && spell.name !== 'Flame Gate') {
     if (spell.tags.includes('Fire')) summonCreature(game, 'Fire Elemental', effectiveTarget, { duration: 8 });

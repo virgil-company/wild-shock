@@ -4,8 +4,8 @@ import { $, PROFILE_KEY, SAVE_KEY, loadProfile, loadStorageItem, saveStorageItem
 import { createBoardRenderer } from './ui/board-renderer.js';
 import {
   initStaticIcons, populateFilters, renderBestiary, renderForgeSidebar,
-  renderHeading, renderHud, renderInspection, renderRw3ForgeView,
-  renderRw3Grimoire, showRw3SpellDetail, showWardrobe,
+  renderHeading, renderHud, renderInspection, renderForgeView,
+  renderGrimoire, showSpellDetail, showWardrobe,
 } from './ui/views.js';
 import { createWikiController } from './ui/wiki.js';
 import { bindInput } from './ui/input.js';
@@ -15,7 +15,7 @@ const state = {
   game: restore(loaded.value) || createGame(),
   profile: loadProfile(),
   storageAvailable: loaded.ok,
-  detailRw3SpellId: null,
+  detailSpellId: null,
   inspectionTarget: null,
   logTurn: null,
   selected: null,
@@ -48,8 +48,8 @@ function render() {
   board.invalidate();
   renderHud(state, { onRender: render, onSaveProfile: saveProfile });
   renderForgeSidebar(state);
-  if (state.view === 'grimoire') renderRw3Grimoire(state);
-  if (state.view === 'forge') renderRw3ForgeView(state);
+  if (state.view === 'grimoire') renderGrimoire(state);
+  if (state.view === 'forge') renderForgeView(state);
   if (state.view === 'wiki') wiki.render();
   updateHint();
   renderInspection(state, state.inspectionTarget);
@@ -80,8 +80,8 @@ function setView(next, options = {}) {
   $('forge-tab').classList.toggle('active', next === 'forge');
   $('wiki-tab').classList.toggle('active', next === 'wiki');
   renderHeading(next);
-  if (next === 'grimoire') renderRw3Grimoire(state);
-  else if (next === 'forge') renderRw3ForgeView(state);
+  if (next === 'grimoire') renderGrimoire(state);
+  else if (next === 'forge') renderForgeView(state);
   else if (next === 'wiki') {
     if (options.category) wiki.setCategory(options.category, options.query || '');
     else wiki.render();
@@ -99,7 +99,7 @@ document.addEventListener('localechange', () => {
   if ($('guide-dialog').open) showWardrobe(state);
   renderHeading(state.view);
   render();
-  if ($('detail-dialog').open && state.detailRw3SpellId != null) showRw3SpellDetail(state, state.detailRw3SpellId, render);
+  if ($('detail-dialog').open && state.detailSpellId != null) showSpellDetail(state, state.detailSpellId, render);
 });
 
 bindInput(canvas, state, { render, draw: () => board.draw(), setView, action, saveProfile });

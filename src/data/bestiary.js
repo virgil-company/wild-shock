@@ -1,15 +1,15 @@
-import { rw3Units, spawnBands } from './rw3-catalog.js';
+import { units as unitCatalog, spawnBands } from './catalog.js';
 
-export const units = new Map(rw3Units.map(unit => [unit.name, unit]));
+export const units = new Map(unitCatalog.map(unit => [unit.name, unit]));
 const sortedUnitNames = [...units.keys()].sort((a, b) => b.length - a.length);
-const common = rw3Units.filter(unit => unit.is_monster && unit.difficulty);
+const common = unitCatalog.filter(unit => unit.is_monster && unit.difficulty);
 const elitesByTier = {
-  Easy: rw3Units.filter(unit => unit.rare?.class === 'Easy'),
-  Medium: rw3Units.filter(unit => unit.rare?.class === 'Medium'),
-  Hard: rw3Units.filter(unit => unit.rare?.class === 'Hard'),
+  Easy: unitCatalog.filter(unit => unit.rare?.class === 'Easy'),
+  Medium: unitCatalog.filter(unit => unit.rare?.class === 'Medium'),
+  Hard: unitCatalog.filter(unit => unit.rare?.class === 'Hard'),
 };
-export const realmBosses = rw3Units.filter(unit => unit.boss_kind === 'final');
-export const companions = rw3Units.filter(unit => unit.is_companion);
+export const realmBosses = unitCatalog.filter(unit => unit.boss_kind === 'final');
+export const companions = unitCatalog.filter(unit => unit.is_companion);
 
 export const pick = (choices, rng) => choices[Math.floor(rng() * choices.length)];
 export const covers = (unit, tile) => Math.max(Math.abs(unit.x - tile.x), Math.abs(unit.y - tile.y)) <= (unit.radius || 0);

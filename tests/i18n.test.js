@@ -2,8 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { t, setLocale, getLocale, locales, localeOptions } from '../src/i18n/i18n.js';
-import { nodes, schools, paths } from '../src/data/catalog.js';
-import { rw3Components, rw3Equipment } from '../src/data/rw3-catalog.js';
+import { components, equipment, nodes, paths, schools } from '../src/data/catalog.js';
 import { artifacts } from '../src/data/artifacts.js';
 import { namedKey } from '../src/i18n/text-keys.js';
 import { nodeName, nodeDescription, logText } from '../src/i18n/game-text.js';
@@ -27,8 +26,8 @@ test('every locale has the same keys and interpolation parameters', () => {
 test('markup and game catalogs reference keys available in every locale', () => {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   const keys = [...html.matchAll(/data-i18n(?:-[\w-]+)?="([^"]+)"/g)].map(match => match[1]);
-  for (const item of rw3Components) keys.push(namedKey('components', item.name));
-  for (const item of rw3Equipment) keys.push(namedKey('equipment', item.name));
+  for (const item of components) keys.push(namedKey('components', item.name));
+  for (const item of equipment) keys.push(namedKey('equipment', item.name));
   for (const item of artifacts) keys.push(`artifacts.${item.id}.name`, `artifacts.${item.id}.description`);
   for (const school of schools) {
     keys.push(`schools.${school.id}.name`, `schools.${school.id}.initiate`, `schools.${school.id}.archmage`);

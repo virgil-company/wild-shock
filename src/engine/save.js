@@ -1,7 +1,7 @@
 import { GAME_MODES, SAVE_VERSION, SIZE, getModeConfig } from '../data/constants.js';
 import { nodeMap } from '../data/catalog.js';
 import { mutators } from '../data/campaign.js';
-import { componentByName, effectiveRw3Spell, spellById } from '../rules/rw3.js';
+import { componentByName, effectiveSpell, spellById } from '../rules/core.js';
 import { migrateLogEntry } from '../i18n/log-migration.js';
 import { finalRealmOf, log } from './context.js';
 
@@ -35,25 +35,25 @@ export function restore(value) {
     game.mode ??= 'standard';
     if (!Object.hasOwn(GAME_MODES, game.mode)) return null;
 
-    game.rw3Spells ??= []; game.rw3Upgrades ??= {}; game.spellBoosts ??= {};
-    if (!game.rw3Spells.length) {
-      game.rw3Spells = [...getModeConfig(game.mode).starterRw3];
-      for (const id of game.rw3Spells) {
-        const eff = effectiveRw3Spell(game, id);
+    game.spells ??= []; game.spellUpgrades ??= {}; game.spellBoosts ??= {};
+    if (!game.spells.length) {
+      game.spells = [...getModeConfig(game.mode).starterSpells];
+      for (const id of game.spells) {
+        const eff = effectiveSpell(game, id);
         if (eff && !(eff.id in game.charges)) game.charges[eff.id] = eff.maxCharges;
       }
     }
     game.allies ??= []; game.clouds ??= []; game.buffs ??= []; game.channel ??= null;
     game.quickstepUsed ??= false; game.bonusMaxHp ??= 0;
     game.player.shields ??= 0; game.player.resistances ??= {}; game.player.statuses ??= {};
-    game.rw3Components ??= []; game.equipment ??= {};
+    game.components ??= []; game.equipment ??= {};
     game.shrine ??= null;
     delete game.bigBangEnabled;
     delete game.charges['dev-big-bang'];
     delete game.spellBoosts['dev-big-bang'];
 
-    if (!Array.isArray(game.rw3Components) || !game.rw3Components.every(name => componentByName.has(name))
-      || !Array.isArray(game.rw3Spells) || !game.rw3Spells.every(id => spellById.has(id))
+    if (!Array.isArray(game.components) || !game.components.every(name => componentByName.has(name))
+      || !Array.isArray(game.spells) || !game.spells.every(id => spellById.has(id))
       || !Object.values(game.equipment).every(entry => entry && typeof entry.name === 'string' && Array.isArray(entry.components))
       || (game.shrine && (!Number.isInteger(game.shrine.x) || !Number.isInteger(game.shrine.y)
         || game.tiles[game.shrine.y]?.[game.shrine.x] !== 0 || !Number.isInteger(game.shrine.uses) || game.shrine.uses < 0 || game.shrine.uses > 3))) return null;

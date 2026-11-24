@@ -1,4 +1,4 @@
-import { rw3Components, rw3Equipment, rw3Spells, rw3Tags } from '../data/rw3-catalog.js';
+import { components, equipment, spells, tags } from '../data/catalog.js';
 import {
   equipmentSlots, DAMAGE_TYPES, TAG_META, SHRINE_TYPES, GAME_MODES,
   mancerTrials, STATUS_LIST, CLOUD_TYPES, getModeConfig,
@@ -7,17 +7,17 @@ import {
 export {
   equipmentSlots, DAMAGE_TYPES, TAG_META, SHRINE_TYPES, GAME_MODES,
   mancerTrials, STATUS_LIST, CLOUD_TYPES, getModeConfig,
-  rw3Components, rw3Equipment, rw3Spells, rw3Tags,
+  components, equipment, spells, tags,
 };
 
-export const componentByName = new Map(rw3Components.map(component => [component.name, component]));
-export const equipmentByName = new Map(rw3Equipment.map(item => [item.name, item]));
-export const spellById = new Map(rw3Spells.map(spell => [spell.id, spell]));
-export const spellByName = new Map(rw3Spells.map(spell => [spell.name, spell]));
+export const componentByName = new Map(components.map(component => [component.name, component]));
+export const equipmentByName = new Map(equipment.map(item => [item.name, item]));
+export const spellById = new Map(spells.map(spell => [spell.id, spell]));
+export const spellByName = new Map(spells.map(spell => [spell.name, spell]));
 
 // Pre-index spellbooks (granted_by -> spell ids) to avoid scanning all 198 spells on every knownSpellIds() call.
 const spellsByBook = new Map();
-for (const spell of rw3Spells) {
+for (const spell of spells) {
   if (spell.granted_by) {
     let list = spellsByBook.get(spell.granted_by);
     if (!list) { list = []; spellsByBook.set(spell.granted_by, list); }
@@ -109,7 +109,7 @@ export function canForge(game, name, componentNames) {
   const item = equipmentByName.get(name);
   if (!item || game.status !== 'playing') return false;
   if (game.allowedEquipment && !game.allowedEquipment.includes(name)) return false;
-  const inv = game.rw3Components || [];
+  const inv = game.components || [];
   const chosen = componentNames || findMatchingComponents(inv, item);
   if (!chosen || !recipeMatches(item, chosen)) return false;
 
@@ -125,9 +125,9 @@ export function canForge(game, name, componentNames) {
 
 export function forge(game, name, componentNames) {
   const item = equipmentByName.get(name);
-  const chosen = componentNames || findMatchingComponents(game.rw3Components || [], item);
+  const chosen = componentNames || findMatchingComponents(game.components || [], item);
   if (!chosen || !canForge(game, name, chosen)) return false;
-  for (const c of chosen) game.rw3Components.splice(game.rw3Components.indexOf(c), 1);
+  for (const c of chosen) game.components.splice(game.components.indexOf(c), 1);
   const copy = equipItem(game, item, chosen);
   applyComponentCraftEffects(game, item, chosen, copy);
   return item;
@@ -154,22 +154,22 @@ export function applyComponentCraftEffects(game, item, componentNames, copy = ga
     const returned = (name === "Enchanter's Awl" && item.tags.includes('Enchantment'))
       || (name === "Polymath's Palimpsest" && item.recipe.some(([tag]) => tag === 'Word'));
     if (returned) {
-      game.rw3Components.push(name);
+      game.components.push(name);
       events.push({ type: 'returned', component: name });
     }
-    const spells = knownSpellIds(game).map(id => spellById.get(id));
+    const knownSpells = knownSpellIds(game).map(id => spellById.get(id));
     if (name === 'Primordial Ooze' && item.tags.includes('Slime')) {
-      const spell = choose(spells.filter(s => !effectiveRw3Spell(game, s.id).tags.includes('Slime')));
-      if (spell) ((game.spellBoosts['rw3-' + spell.id] ??= {}).tags ??= []).push('Slime');
+      const spell = choose(knownSpells.filter(s => !effectiveSpell(game, s.id).tags.includes('Slime')));
+      if (spell) ((game.spellBoosts['spell-' + spell.id] ??= {}).tags ??= []).push('Slime');
     }
     if (name === 'Charred Relic' && item.tags.includes('Holy')) {
-      const spell = choose(spells.filter(s => effectiveRw3Spell(game, s.id).tags.includes('Holy')));
+      const spell = choose(knownSpells.filter(s => effectiveSpell(game, s.id).tags.includes('Holy')));
       if (spell) (copy.relicSpells ??= []).push(spell.id);
     }
     if (name === 'Chimera Eyes' && item.tags.some(t => t === 'Chaos' || t === 'Eye')) {
       let granted = false;
-      for (const spell of spells.filter(s => effectiveRw3Spell(game, s.id).tags.includes('Eye'))) {
-        const known = game.rw3Upgrades[spell.id] ??= [];
+      for (const spell of knownSpells.filter(s => effectiveSpell(game, s.id).tags.includes('Eye'))) {
+        const known = game.spellUpgrades[spell.id] ??= [];
         const u = choose(spell.upgrades.filter(u => !known.includes(u.sp_id)));
         if (u) { known.push(u.sp_id); granted = true; }
       }
@@ -184,13 +184,13 @@ export function applyComponentCraftEffects(game, item, componentNames, copy = ga
 
 export function addComponent(game, name) {
   if (!componentByName.has(name)) return false;
-  game.rw3Components ??= [];
-  game.rw3Components.push(name);
+  game.components ??= [];
+  game.components.push(name);
   return true;
 }
 
 export function catalogueCounts() {
-  return { spells: rw3Spells.length, equipment: rw3Equipment.length, components: rw3Components.length };
+  return { spells: spells.length, equipment: equipment.length, components: components.length };
 }
 
 // Parse equipment bonus lines like:
@@ -417,7 +417,7 @@ export function parseUpgradeEffects(upgrade) {
 export function knownSpellIds(game) {
   const seen = new Set();
   const result = [];
-  for (const id of game.rw3Spells || []) {
+  for (const id of game.spells || []) {
     if (!seen.has(id) && !spellById.get(id)?.granted_by) {
       seen.add(id);
       result.push(id);
@@ -440,7 +440,7 @@ export function tagMastery(game, tag) {
   const mods = getEquipmentModifiers(game);
   let total = 0;
   for (const id of knownSpellIds(game)) {
-    const spell = effectiveRw3Spell(game, id, mods);
+    const spell = effectiveSpell(game, id, mods);
     if (spell && spell.tags.includes(tag)) total += spell.level;
   }
   return total;
@@ -450,29 +450,29 @@ const transmutationCache = new Map();
 export function transmutationChoices(name) {
   if (transmutationCache.has(name)) return transmutationCache.get(name);
   const source = componentByName.get(name);
-  const result = source ? rw3Components.filter(c => c.name !== name && c.tags.some(tag => source.tags.includes(tag))) : [];
+  const result = source ? components.filter(c => c.name !== name && c.tags.some(tag => source.tags.includes(tag))) : [];
   transmutationCache.set(name, result);
   return result;
 }
 
-export function canLearnRw3Spell(game, spellId) {
+export function canLearnSpell(game, spellId) {
   const spell = spellById.get(spellId);
   if (!spell || game.status !== 'playing') return false;
   if (game.allowedSpells && !game.allowedSpells.includes(spellId)) return false;
   if (spell.granted_by || game.mode === 'trial-scavenger') return false;
-  if ((game.rw3Spells || []).includes(spellId)) return false;
+  if ((game.spells || []).includes(spellId)) return false;
   const mode = getModeConfig(game.mode);
   if (mode.allowedTags && !spell.tags.some(t => mode.allowedTags.includes(t))) return false;
   return game.points >= spell.level;
 }
 
-export function canLearnRw3Upgrade(game, spellId, spId) {
+export function canLearnUpgrade(game, spellId, spId) {
   const spell = spellById.get(spellId);
   if (!spell || game.status !== 'playing') return false;
   if (!knownSpellIds(game).includes(spellId)) return false;
   const upgrade = getUpgradeMap(spell).get(spId);
   if (!upgrade) return false;
-  if ((game.rw3Upgrades?.[spellId] || []).includes(spId)) return false;
+  if ((game.spellUpgrades?.[spellId] || []).includes(spId)) return false;
   return game.points >= upgrade.level;
 }
 
@@ -484,30 +484,30 @@ const SPECIAL_SPELLS = new Set([
 ]);
 
 const behaviorCache = new WeakMap();
-export function classifyRw3SpellBehavior(spell, tags = spell.tags) {
-  if (tags === spell.tags && behaviorCache.has(spell)) return behaviorCache.get(spell);
+export function classifySpellBehavior(spell, spellTags = spell.tags) {
+  if (spellTags === spell.tags && behaviorCache.has(spell)) return behaviorCache.get(spell);
   const desc = (spell.desc || '').toLowerCase();
   let result;
   if (SPECIAL_SPELLS.has(spell.name)) result = 'special';
   else if (spell.tags.includes('Orb') && desc.startsWith('summon an orb')) result = 'orb';
   else if (spell.name === 'Healing Light') result = 'heal_allies';
-  else if (tags.includes('Translocation') && /teleport|swap|blink|ride drake|mounted/i.test(desc)) {
+  else if (spellTags.includes('Translocation') && /teleport|swap|blink|ride drake|mounted/i.test(desc)) {
     result = /mount|ride drake/i.test(desc) ? 'self_buff' : /teleport all units/i.test(desc) ? 'disperse' : 'teleport';
-  } else if (tags.includes('Conjuration') && (spell.stats?.minion_health || /summon/i.test(desc))) result = 'summon';
+  } else if (spellTags.includes('Conjuration') && (spell.stats?.minion_health || /summon/i.test(desc))) result = 'summon';
   else if (/create \[.*clouds?:/i.test(desc) || /blizzard|rain clouds|storm clouds|fire clouds/i.test(desc)) result = 'cloud';
   else if (/in a beam|in a line/i.test(desc)) result = 'beam';
   else if (/in a cone|in an arc/i.test(desc)) result = 'cone';
   else if (/bounces? up to|chain/i.test(desc)) result = 'chain';
-  else if (tags.includes('Enchantment') && !spell.stats?.range) result = 'self_buff';
+  else if (spellTags.includes('Enchantment') && !spell.stats?.range) result = 'self_buff';
   else if (/heal allies/i.test(desc) && !spell.stats?.range) result = 'heal_allies';
   else if (spell.stats?.radius > 0) result = 'burst';
   else result = 'single';
 
-  if (tags === spell.tags) behaviorCache.set(spell, result);
+  if (spellTags === spell.tags) behaviorCache.set(spell, result);
   return result;
 }
 
-export function effectiveRw3Spell(game, spellId, precomputedMods = null) {
+export function effectiveSpell(game, spellId, precomputedMods = null) {
   const base = spellById.get(spellId);
   if (!base) return null;
   const stats = {
@@ -528,14 +528,14 @@ export function effectiveRw3Spell(game, spellId, precomputedMods = null) {
     max_channel: base.stats?.max_channel ?? 0,
     shot_cooldown: base.stats?.shot_cooldown ?? 0,
   };
-  const boost = game.spellBoosts?.[`rw3-${spellId}`];
-  const tags = boost?.tags?.length ? [...new Set([...base.tags, ...boost.tags])] : [...base.tags];
+  const boost = game.spellBoosts?.[`spell-${spellId}`];
+  const spellTags = boost?.tags?.length ? [...new Set([...base.tags, ...boost.tags])] : [...base.tags];
   const damageTypes = [...(base.damage_type || [])];
   let quickCast = !!base.quick_cast;
   let requiresLos = base.requires_los !== false;
   if (game.buffs?.some(b => b.noLos)) requiresLos = false;
   const extraStatuses = [];
-  const learnedUpgrades = game.rw3Upgrades?.[spellId] || [];
+  const learnedUpgrades = game.spellUpgrades?.[spellId] || [];
   const upgradeMap = getUpgradeMap(base);
   const upgradeNames = [];
 
@@ -547,18 +547,18 @@ export function effectiveRw3Spell(game, spellId, precomputedMods = null) {
     for (const [k, v] of Object.entries(parsed.stats)) {
       if (k in stats) stats[k] = Math.max(0, stats[k] + v);
     }
-    for (const t of parsed.addTags) if (!tags.includes(t)) tags.push(t);
+    for (const t of parsed.addTags) if (!spellTags.includes(t)) spellTags.push(t);
     for (const dt of parsed.addDamageTypes) if (!damageTypes.includes(dt)) damageTypes.push(dt);
     if (parsed.quickCast) quickCast = true;
     if (parsed.noLos) requiresLos = false;
     if (parsed.status) extraStatuses.push(parsed.status);
   }
 
-  // Apply RW3 equipment bonuses matching any of this spell's tags
+  // Apply equipment bonuses matching any of this spell's tags
   const mods = precomputedMods || getEquipmentModifiers(game);
   const percentages = {};
   for (const bonus of mods.bonuses) {
-    if ((bonus.tag && !tags.includes(bonus.tag)) || (bonus.spellId && bonus.spellId !== spellId)) continue;
+    if ((bonus.tag && !spellTags.includes(bonus.tag)) || (bonus.spellId && bonus.spellId !== spellId)) continue;
     if (!stats[bonus.stat] && !Object.hasOwn(base.stats, bonus.stat)) continue;
     if (bonus.percent) percentages[bonus.stat] = (percentages[bonus.stat] || 0) + bonus.amount;
     else stats[bonus.stat] += bonus.amount;
@@ -567,7 +567,7 @@ export function effectiveRw3Spell(game, spellId, precomputedMods = null) {
     stats[stat] = Math.max(0, Math.floor(stats[stat] * (1 + percent / 100)));
   }
   if (game.buffs?.some(b => b.quickcastAll)) quickCast = true;
-  for (const tag of tags) if (mods.quickcastTags.has(tag)) quickCast = true;
+  for (const tag of spellTags) if (mods.quickcastTags.has(tag)) quickCast = true;
 
   // Apply Shrine of Empowerment permanent spell boosts
   if (boost) {
@@ -598,17 +598,16 @@ export function effectiveRw3Spell(game, spellId, precomputedMods = null) {
     stats.max_charges = 0;
   }
 
-  const primaryTag = tags[0] || 'Arcane';
+  const primaryTag = spellTags[0] || 'Arcane';
   const meta = TAG_META[primaryTag] || TAG_META.Arcane;
-  const behavior = classifyRw3SpellBehavior(base, base.tags);
+  const behavior = classifySpellBehavior(base, base.tags);
 
   return {
-    id: `rw3-${base.id}`,
-    rw3Id: base.id,
-    isRw3: true,
+    id: `spell-${base.id}`,
+    spellId: base.id,
     name: base.name,
     level: base.level,
-    tags,
+    tags: spellTags,
     damageTypes: damageTypes.length ? damageTypes : ['Arcane'],
     stats,
     damage: stats.damage,
@@ -634,8 +633,8 @@ export function effectiveRw3Spell(game, spellId, precomputedMods = null) {
 }
 
 export function craftableEquipment(game) {
-  const inv = game.rw3Components || [];
+  const inv = game.components || [];
   if (!inv.length) return [];
   const allowed = game.allowedEquipment ? new Set(game.allowedEquipment) : null;
-  return rw3Equipment.filter(item => (!allowed || allowed.has(item.name)) && !!findMatchingComponents(inv, item));
+  return equipment.filter(item => (!allowed || allowed.has(item.name)) && !!findMatchingComponents(inv, item));
 }

@@ -1,7 +1,6 @@
 import en from './locales/en.js';
-import { nodes, schools, paths } from '../data/catalog.js';
+import { components, equipment, nodes, paths, schools } from '../data/catalog.js';
 import { artifacts } from '../data/artifacts.js';
-import { rw3Components, rw3Equipment } from '../data/rw3-catalog.js';
 import { namedKey, textRef } from './text-keys.js';
 
 // One-time conversion for journeys saved before logs stored translation keys.
@@ -23,8 +22,8 @@ function ensureMigrationTables() {
   refs = new Map();
   for (const node of nodes) refs.set(node.name, textRef('atlas.nodeName', { spell: textRef(`spells.${node.school}-${node.path}.name`), rank: node.rank }));
   for (const school of schools) for (const path of paths) refs.set(`${school.name} ${path.name}`, textRef(`spells.${school.id}-${path.id}.name`));
-  for (const item of rw3Components) refs.set(item.name, textRef(namedKey('components', item.name)));
-  for (const item of rw3Equipment) refs.set(item.name, textRef(namedKey('equipment', item.name)));
+  for (const item of components) refs.set(item.name, textRef(namedKey('components', item.name)));
+  for (const item of equipment) refs.set(item.name, textRef(namedKey('equipment', item.name)));
   for (const item of artifacts) refs.set(item.name, textRef(`artifacts.${item.id}.name`));
   for (const [key, value] of Object.entries(en)) if (/^(materials|slots|enemies)\./.test(key)) refs.set(value, textRef(key));
 }

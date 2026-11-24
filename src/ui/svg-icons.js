@@ -1,4 +1,4 @@
-// Handcrafted SVG Visual Asset Library for Wild Shock — Rift Wizard 3 Edition
+// Handcrafted SVG Visual Asset Library for Wild Shock
 // Memoized so repeated card/grid renders reuse prebuilt SVG markup strings.
 
 export const TAG_COLORS = {
