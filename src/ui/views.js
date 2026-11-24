@@ -14,6 +14,7 @@ import {
   knownSpellIds, rw3Equipment, rw3Spells, rw3Tags, spellById, transmutationChoices,
 } from '../rules/rw3.js';
 import { entityIconSvg, shrineIconSvg, slotIconSvg, tagIconSvg, uiIconSvg, wizardPortraitSvg } from './svg-icons.js';
+import { totalWikiEntries } from './wiki.js';
 import { $, cleanRw3Desc, escapeHtml, h } from './dom.js';
 
 export function initStaticIcons() {
@@ -47,6 +48,7 @@ export function renderHeading(view) {
     realm: ['realm.title', 'realm.subtitle'],
     grimoire: ['rw3.grimoireTitle', 'rw3.grimoireSubtitle'],
     forge: ['rw3.forgeTitle', 'rw3.forgeSubtitle'],
+    wiki: ['wiki.title', 'wiki.subtitle'],
   };
   const [tk, sk] = map[view] || map.realm;
   $('page-title').innerHTML = `${h(tk)}<span>.</span>`;
@@ -240,6 +242,7 @@ export function renderHud(state, { onRender, onSaveProfile }) {
 
   $('spell-total').textContent = rw3Spells.length;
   $('equipment-total').textContent = rw3Equipment.length;
+  if ($('wiki-total')) $('wiki-total').textContent = totalWikiEntries();
   $('seed-label').textContent = `#${String(game.seed).slice(-6).padStart(6, '0')}`;
   $('mode-badge').textContent = game.mode && game.mode !== 'standard' ? t(`mode.${game.mode}`).split('(')[0].trim() : '';
   $('health-label').textContent = `${game.player.hp} / ${maxHp}`;

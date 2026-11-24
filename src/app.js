@@ -7,6 +7,7 @@ import {
   renderHeading, renderHud, renderInspection, renderRw3ForgeView,
   renderRw3Grimoire, showRw3SpellDetail, showWardrobe,
 } from './ui/views.js';
+import { createWikiController } from './ui/wiki.js';
 import { bindInput } from './ui/input.js';
 
 const loaded = loadStorageItem(SAVE_KEY);
@@ -25,6 +26,7 @@ const state = {
 
 const canvas = $('board');
 const board = createBoardRenderer(canvas, state);
+const wiki = createWikiController($('wiki-view'), { getState: () => state, standalone: false });
 
 function saveProfile() {
   if (!saveStorageItem(PROFILE_KEY, JSON.stringify(state.profile))) state.storageAvailable = false;
@@ -48,6 +50,7 @@ function render() {
   renderForgeSidebar(state);
   if (state.view === 'grimoire') renderRw3Grimoire(state);
   if (state.view === 'forge') renderRw3ForgeView(state);
+  if (state.view === 'wiki') wiki.render();
   updateHint();
   renderInspection(state, state.inspectionTarget);
   board.draw();
@@ -65,19 +68,24 @@ function action(fn) {
   }
 }
 
-function setView(next) {
+function setView(next, options = {}) {
   state.view = next;
   document.body.classList.toggle('view-realm', next === 'realm');
   $('realm-view').hidden = next !== 'realm';
   $('grimoire-view').hidden = next !== 'grimoire';
   $('forge-view').hidden = next !== 'forge';
+  $('wiki-view').hidden = next !== 'wiki';
   $('realm-tab').classList.toggle('active', next === 'realm');
   $('grimoire-tab').classList.toggle('active', next === 'grimoire');
   $('forge-tab').classList.toggle('active', next === 'forge');
+  $('wiki-tab').classList.toggle('active', next === 'wiki');
   renderHeading(next);
   if (next === 'grimoire') renderRw3Grimoire(state);
   else if (next === 'forge') renderRw3ForgeView(state);
-  else board.draw();
+  else if (next === 'wiki') {
+    if (options.category) wiki.setCategory(options.category, options.query || '');
+    else wiki.render();
+  } else board.draw();
 }
 
 const language = $('language-select');

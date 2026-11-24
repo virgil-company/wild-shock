@@ -17,7 +17,7 @@ export function bindInput(canvas, state, controllers) {
   const { render, draw, setView, action, saveProfile } = controllers;
 
   $('shrine-special-select').onchange = () => renderShrineResult(state.game);
-  $('bestiary-button').onclick = () => { renderBestiary(state); $('bestiary-dialog').showModal(); };
+  $('bestiary-button').onclick = () => setView('wiki', { category: 'monsters' });
   $('unit-search').oninput = $('unit-discovered').onchange = () => renderBestiary(state);
   $('unit-select').onchange = () => showUnit(state);
 
@@ -48,6 +48,7 @@ export function bindInput(canvas, state, controllers) {
   $('realm-tab').onclick = () => setView('realm');
   $('grimoire-tab').onclick = $('grimoire-cta').onclick = () => setView('grimoire');
   $('forge-tab').onclick = $('open-forge-cta').onclick = () => setView('forge');
+  if ($('wiki-tab')) $('wiki-tab').onclick = () => setView('wiki');
 
   $('guide-button').onclick = () => { showWardrobe(state); $('guide-dialog').showModal(); };
   $('wardrobe-select').onchange = () => { state.profile.selected = $('wardrobe-select').value; saveProfile(); render(); };
@@ -197,6 +198,7 @@ export function bindInput(canvas, state, controllers) {
     }
     if (key === 't' || key === 'g') { event.preventDefault(); setView(state.view === 'grimoire' ? 'realm' : 'grimoire'); return; }
     if (key === 'f') { event.preventDefault(); setView(state.view === 'forge' ? 'realm' : 'forge'); return; }
+    if (key === 'b') { event.preventDefault(); setView(state.view === 'wiki' ? 'realm' : 'wiki'); return; }
     if (state.view !== 'realm') return;
     if (state.game.deploying && key === 'enter') { event.preventDefault(); action(() => deploy(state.game, state.hover || state.game.player)); return; }
     if (state.game.mode !== 'standard' && KEYPAD_DIAGONALS[event.code]) { event.preventDefault(); action(() => move(state.game, ...KEYPAD_DIAGONALS[event.code])); return; }

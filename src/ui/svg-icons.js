@@ -24,6 +24,12 @@ export const TAG_COLORS = {
   Word: '#fda4af',
   Physical: '#d6d3d1',
   Poison: '#84cc16',
+  Construct: '#94a3b8',
+  Demon: '#ef4444',
+  Glass: '#a5f3fc',
+  Living: '#86efac',
+  Spider: '#c4b5fd',
+  Undead: '#d4d4d8',
 };
 
 const svgCache = new Map();
@@ -110,6 +116,11 @@ const SHRINE_PATHS = {
   empowerment: `<path d="M16 4L21 12V27H11V12L16 4Z" fill="#e5c27b" fill-opacity="0.25" stroke="#e5c27b" stroke-width="2" stroke-linejoin="round"/><path d="M16 11V21M13 15L16 11L19 15" stroke="#fef08a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`,
   chronomancy: `<path d="M9 5H23M9 27H23M10 5C10 12 16 14 16 16C16 18 10 20 10 27M22 5C22 12 16 14 16 16C16 18 22 20 22 27" stroke="#7bd0ff" stroke-width="2" stroke-linecap="round"/><polygon points="12,24 20,24 16,19" fill="#e5c27b"/>`,
   calling: `<path d="M8 22H24L21 27H11L8 22Z" fill="#e5c27b" fill-opacity="0.25" stroke="#e5c27b" stroke-width="1.9"/><path d="M16 6C16 6 22 11.5 22 16C22 19.3 19.3 21.5 16 21.5C12.7 21.5 10 19.3 10 16C10 11.5 16 6 16 6Z" fill="#4ade80" fill-opacity="0.35" stroke="#4ade80" stroke-width="1.9"/>`,
+  haste: `<path d="M19 4L8 17H15L13 28L24 15H17L19 4Z" fill="#facc15" fill-opacity="0.3" stroke="#facc15" stroke-width="2" stroke-linejoin="round"/><path d="M4 11H9M3 16H7M23 21H28" stroke="#fef08a" stroke-width="1.8" stroke-linecap="round"/>`,
+  offering: `<path d="M7 18H25L22 25H10L7 18Z" fill="#fb923c" fill-opacity="0.25" stroke="#e5c27b" stroke-width="2" stroke-linejoin="round"/><path d="M16 6C16 6 21 10 21 13.5C21 16 18.8 18 16 18C13.2 18 11 16 11 13.5C11 10 16 6 16 6Z" fill="#fb923c" fill-opacity="0.45" stroke="#fed7aa" stroke-width="1.7"/>`,
+  knowledge: `<path d="M5 8C9 7 13 8 16 11C19 8 23 7 27 8V23C23 22 19 23 16 26C13 23 9 22 5 23V8Z" fill="#c084fc" fill-opacity="0.24" stroke="#e9d5ff" stroke-width="1.9" stroke-linejoin="round"/><path d="M16 11V26" stroke="#e5c27b" stroke-width="1.6"/>`,
+  reformation: `<path d="M9 11A8 8 0 0 1 23 11M23 21A8 8 0 0 1 9 21" stroke="#38bdf8" stroke-width="2" stroke-linecap="round"/><polyline points="20,8 23.5,11 20,14" stroke="#38bdf8" stroke-width="1.8" fill="none"/><polyline points="12,18 8.5,21 12,24" stroke="#38bdf8" stroke-width="1.8" fill="none"/><circle cx="16" cy="16" r="2.8" fill="#ffdf9f"/>`,
+  spellgraft: `<circle cx="12" cy="16" r="6.5" fill="#f0abfc" fill-opacity="0.22" stroke="#f0abfc" stroke-width="1.9"/><circle cx="20" cy="16" r="6.5" fill="#7bd0ff" fill-opacity="0.22" stroke="#7bd0ff" stroke-width="1.9"/><circle cx="16" cy="16" r="2" fill="#ffffff"/>`,
 };
 
 const ENTITY_PATHS = {
@@ -129,6 +140,14 @@ const ENTITY_PATHS = {
   cloud: `<path d="M9 22H23C25.8 22 28 19.8 28 17C28 14.5 26.2 12.5 23.8 12.1C23 8.6 19.8 6 16 6C12 6 8.7 9 8.2 12.9C5.8 13.3 4 15.4 4 17.8C4 20.1 6.2 22 9 22Z" fill="#7bd0ff" fill-opacity="0.28" stroke="#7bd0ff" stroke-width="2" stroke-linejoin="round"/>`,
   chasm: `<rect x="5" y="5" width="22" height="22" rx="3" fill="#020617" stroke="#38bdf8" stroke-opacity="0.5" stroke-width="1.8"/><path d="M9 11L16 21L23 11" stroke="#38bdf8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>`,
   empty: `<circle cx="16" cy="16" r="9" stroke="#998f80" stroke-width="1.6" stroke-dasharray="3 3"/><path d="M16 4V9M16 23V28M4 16H9M23 16H28" stroke="#e5c27b" stroke-width="1.8" stroke-linecap="round"/><circle cx="16" cy="16" r="2" fill="#e5c27b"/>`,
+  chest: `<rect x="5" y="10" width="22" height="16" rx="2.5" fill="#bb783e" fill-opacity="0.32" stroke="#e5c27b" stroke-width="2"/><path d="M5 16H27" stroke="#e5c27b" stroke-width="1.8"/><rect x="13.5" y="13.5" width="5" height="5" rx="1" fill="#ffdf9f"/>`,
+  scroll: `<rect x="8" y="6" width="16" height="20" rx="2.5" fill="#fae4ac" fill-opacity="0.22" stroke="#e5c27b" stroke-width="2"/><path d="M12 11H20M12 15.5H20M12 20H17" stroke="#ffdf9f" stroke-width="1.7" stroke-linecap="round"/>`,
+  tome: `<rect x="7" y="5" width="18" height="22" rx="2.5" fill="#8861bf" fill-opacity="0.32" stroke="#c084fc" stroke-width="2"/><path d="M11 5V27" stroke="#e9d5ff" stroke-width="1.8"/><path d="M15 11H21M15 15.5H21M15 20H19" stroke="#ffdf9f" stroke-width="1.6" stroke-linecap="round"/>`,
+  vault: `<path d="M7 26V13C7 8 11 5 16 5C21 5 25 8 25 13V26H7Z" fill="#e5c27b" fill-opacity="0.18" stroke="#e5c27b" stroke-width="2" stroke-linejoin="round"/><path d="M12 26V15C12 12.5 13.8 11 16 11C18.2 11 20 12.5 20 15V26" fill="#09100d" stroke="#7bd0ff" stroke-width="1.6"/><circle cx="16" cy="18" r="1.8" fill="#ffdf9f"/>`,
+  mutator: `<circle cx="16" cy="16" r="10" fill="#f87171" fill-opacity="0.16" stroke="#f87171" stroke-width="1.9" stroke-dasharray="4 2"/><path d="M16 9L18.5 14L23.5 16L18.5 18L16 23L13.5 18L8.5 16L13.5 14Z" fill="#fb7185" fill-opacity="0.45" stroke="#fecaca" stroke-width="1.4"/>`,
+  outfit: `<path d="M9 13L16 5L23 13L26 15L22 17L21 26H11L10 17L6 15L9 13Z" fill="#355243" fill-opacity="0.55" stroke="#e5c27b" stroke-width="1.9" stroke-linejoin="round"/><path d="M16 12V26" stroke="#ffdf9f" stroke-width="1.5"/>`,
+  artifact: `<polygon points="16,4 25,11 22,25 10,25 7,11" fill="#e5c27b" fill-opacity="0.25" stroke="#ffdf9f" stroke-width="2" stroke-linejoin="round"/><circle cx="16" cy="15" r="4" fill="#7bd0ff" fill-opacity="0.55" stroke="#e0f2fe" stroke-width="1.4"/>`,
+  wiki: `<path d="M5 7C9 6 13 7 16 10C19 7 23 6 27 7V24C23 23 19 24 16 27C13 24 9 23 5 24V7Z" fill="#e5c27b" fill-opacity="0.18" stroke="#e5c27b" stroke-width="1.9" stroke-linejoin="round"/><path d="M16 10V27M9 12H13M9 16H13M19 12H23M19 16H23" stroke="#ffdf9f" stroke-width="1.5" stroke-linecap="round"/>`,
 };
 
 const UI_PATHS = {
@@ -164,6 +183,14 @@ function buildTagInner(tag) {
     case 'Translocation': return `<path d="M7 12H23M19 8L23 12L19 16" stroke="${c}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M25 20H9M13 16L9 20L13 24" stroke="#a5f3fc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
     case 'Ritual': return `<circle cx="16" cy="16" r="10" stroke="${c}" stroke-width="1.8"/><circle cx="16" cy="16" r="5" fill="${c}" fill-opacity="0.28" stroke="${c}" stroke-width="1.5"/><path d="M16 4V8M16 24V28M4 16H8M24 16H28" stroke="#fef3c7" stroke-width="1.8" stroke-linecap="round"/>`;
     case 'Word': return `<path d="M9 7H23V25L16 21.5L9 25V7Z" fill="${c}" fill-opacity="0.25" stroke="${c}" stroke-width="2" stroke-linejoin="round"/><path d="M13 12H19M16 12V18" stroke="#ffe4e6" stroke-width="1.8" stroke-linecap="round"/>`;
+    case 'Physical': return `<path d="M8 24L22 10M18 8L24 8L24 14" stroke="${c}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M11 17L15 21" stroke="#e5c27b" stroke-width="2" stroke-linecap="round"/>`;
+    case 'Poison': return `<path d="M16 5C16 5 23 13 23 19C23 23 20 26.5 16 26.5C12 26.5 9 23 9 19C9 13 16 5 16 5Z" fill="${c}" fill-opacity="0.28" stroke="${c}" stroke-width="2"/><circle cx="13.5" cy="18.5" r="1.5" fill="#ecfccb"/><circle cx="18.5" cy="18.5" r="1.5" fill="#ecfccb"/><path d="M14 22.5H18" stroke="#ecfccb" stroke-width="1.5" stroke-linecap="round"/>`;
+    case 'Construct': return `<rect x="7" y="7" width="18" height="18" rx="3" fill="${c}" fill-opacity="0.22" stroke="${c}" stroke-width="2"/><circle cx="12.5" cy="14" r="1.6" fill="#7bd0ff"/><circle cx="19.5" cy="14" r="1.6" fill="#7bd0ff"/><path d="M11 20H21" stroke="#cbd5e1" stroke-width="1.8" stroke-linecap="round"/>`;
+    case 'Demon': return `<path d="M9 12L6 5L13 10M23 12L26 5L19 10" stroke="${c}" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/><circle cx="16" cy="18" r="8" fill="${c}" fill-opacity="0.28" stroke="${c}" stroke-width="2"/><circle cx="13" cy="17" r="1.8" fill="#fef08a"/><circle cx="19" cy="17" r="1.8" fill="#fef08a"/>`;
+    case 'Glass': return `<polygon points="16,4 25,13 16,28 7,13" fill="${c}" fill-opacity="0.22" stroke="${c}" stroke-width="2" stroke-linejoin="round"/><path d="M16 4L19 13L16 28M7 13H25" stroke="#ecfeff" stroke-width="1.2" opacity="0.8"/>`;
+    case 'Living': return `<circle cx="16" cy="16" r="9.5" fill="${c}" fill-opacity="0.2" stroke="${c}" stroke-width="2"/><path d="M16 10V22M11 16H21" stroke="#dcfce7" stroke-width="2" stroke-linecap="round"/>`;
+    case 'Spider': return `<circle cx="16" cy="17" r="5.5" fill="${c}" fill-opacity="0.32" stroke="${c}" stroke-width="2"/><circle cx="16" cy="10" r="3" fill="${c}" fill-opacity="0.4" stroke="${c}" stroke-width="1.6"/><path d="M11 14L5 10M10.5 17H4M11 20L6 24M21 14L27 10M21.5 17H28M21 20L26 24" stroke="${c}" stroke-width="1.6" stroke-linecap="round"/>`;
+    case 'Undead': return `<path d="M9 14C9 9.5 12 6.5 16 6.5C20 6.5 23 9.5 23 14C23 17 21.5 19 20 20.5V24.5H12V20.5C10.5 19 9 17 9 14Z" fill="${c}" fill-opacity="0.2" stroke="${c}" stroke-width="2" stroke-linejoin="round"/><circle cx="13.2" cy="14.5" r="1.9" fill="#a78bfa"/><circle cx="18.8" cy="14.5" r="1.9" fill="#a78bfa"/>`;
     default: return `<path d="M16 4L19.5 12.5L28 16L19.5 19.5L16 28L12.5 19.5L4 16L12.5 12.5L16 4Z" fill="${c}" fill-opacity="0.28" stroke="${c}" stroke-width="1.9" stroke-linejoin="round"/><circle cx="16" cy="16" r="3.2" fill="#f3e8ff"/>`;
   }
 }
@@ -201,5 +228,47 @@ export function uiIconSvg(name, size = 18) {
   const key = `ui:${name}:${size}`;
   let cached = svgCache.get(key);
   if (!cached) { cached = wrapSvg(UI_PATHS[name] || UI_PATHS.sp, size); svgCache.set(key, cached); }
+  return cached;
+}
+
+export function unitIconSvg(unit, size = 34) {
+  if (!unit) return entityIconSvg('empty', size);
+  const tags = unit.tags || [];
+  if (unit.boss_kind === 'mordred') return entityIconSvg('mordred', size);
+  if (unit.is_boss) return entityIconSvg('boss', size);
+  if (unit.is_companion) return entityIconSvg('ally', size);
+  const priorityTags = ['Dragon', 'Spider', 'Slime', 'Eye', 'Orb', 'Undead', 'Demon', 'Construct', 'Glass'];
+  for (const tg of priorityTags) {
+    if (tags.includes(tg)) return tagIconSvg(tg, size);
+  }
+  if (tags.includes('Metallic')) return entityIconSvg('knight', size);
+  if (unit.flying) return entityIconSvg('moth', size);
+  if (tags.length) return tagIconSvg(tags[0], size);
+  return entityIconSvg('imp', size);
+}
+
+export function componentIconSvg(component, size = 28) {
+  const primary = component?.tags?.[0] || 'Arcane';
+  const c = TAG_COLORS[primary] || '#c084fc';
+  const rare = component?.rare ? '1' : '0';
+  const key = `comp:${primary}:${rare}:${size}`;
+  let cached = svgCache.get(key);
+  if (!cached) {
+    const stroke = component?.rare ? '#ffdf9f' : c;
+    const inner = `<polygon points="16,4 26,10.5 26,21.5 16,28 6,21.5 6,10.5" fill="${c}" fill-opacity="0.24" stroke="${stroke}" stroke-width="2" stroke-linejoin="round"/><polygon points="16,9 21.5,12.5 21.5,19.5 16,23 10.5,19.5 10.5,12.5" fill="${c}" fill-opacity="0.4" stroke="#ffffff" stroke-opacity="0.7" stroke-width="1.1"/><circle cx="16" cy="16" r="2.4" fill="#ffffff"/>`;
+    cached = wrapSvg(inner, size);
+    svgCache.set(key, cached);
+  }
+  return cached;
+}
+
+export function cloudIconSvg(color = '#7bd0ff', size = 28) {
+  const key = `cloud:${color}:${size}`;
+  let cached = svgCache.get(key);
+  if (!cached) {
+    const inner = `<path d="M9 22H23C25.8 22 28 19.8 28 17C28 14.5 26.2 12.5 23.8 12.1C23 8.6 19.8 6 16 6C12 6 8.7 9 8.2 12.9C5.8 13.3 4 15.4 4 17.8C4 20.1 6.2 22 9 22Z" fill="${color}" fill-opacity="0.3" stroke="${color}" stroke-width="2" stroke-linejoin="round"/>`;
+    cached = wrapSvg(inner, size);
+    svgCache.set(key, cached);
+  }
   return cached;
 }

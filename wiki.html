@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#09100d">
+  <meta name="description" content="" data-i18n-content="wiki.subtitle">
+  <title data-i18n="wiki.title"></title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="./index.html" aria-label="" data-i18n-aria-label="nav.wildShockHome">
+      <span class="brand-mark" id="brand-mark-icon" aria-hidden="true">ϟ</span>
+      <span class="brand-text">
+        <span data-i18n="app.brand"></span>
+        <small data-i18n="nav.aSpellcraftRoguelike"></small>
+      </span>
+    </a>
+
+    <nav class="main-nav" aria-label="" data-i18n-aria-label="nav.mainNavigation">
+      <a class="nav" href="./index.html">
+        <span data-i18n="nav.theRealm"></span>
+      </a>
+      <a class="nav active" href="./wiki.html" aria-current="page">
+        <span data-i18n="nav.wiki"></span>
+      </a>
+    </nav>
+
+    <div class="topbar-actions">
+      <div class="language-picker">
+        <label class="sr-only" for="language-select" data-i18n="common.language"></label>
+        <select id="language-select" aria-label="" data-i18n-aria-label="common.language"></select>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section id="wiki-root"></section>
+  <footer>
+    <span><span data-i18n="app.brand"></span> <span class="footer-dot">✦</span> <span data-i18n="wiki.title"></span></span>
+    <span><a href="./index.html" data-i18n="wiki.backToGame"></a></span>
+  </footer>
+</main>
+
+<script type="module" src="./src/wiki-page.js"></script>
+</body>
+</html>
