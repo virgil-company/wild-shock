@@ -344,6 +344,13 @@ export function knownSpellIds(game) {
     ...rw3Spells.filter(spell => items.has(spell.granted_by)).map(spell => spell.id)])];
 }
 
+export function tagMastery(game, tag) {
+  return knownSpellIds(game)
+    .map(id => effectiveRw3Spell(game, id))
+    .filter(spell => spell && spell.tags.includes(tag))
+    .reduce((total, spell) => total + spell.level, 0);
+}
+
 export function transmutationChoices(name) {
   const source = componentByName.get(name);
   return source ? rw3Components.filter(c => c.name !== name && c.tags.some(tag => source.tags.includes(tag))) : [];
@@ -460,6 +467,15 @@ export function effectiveRw3Spell(game, spellId) {
   }
 
   if (stats.damage > 0 && game.mutators?.includes('damageDebuff')) stats.damage = Math.max(1, Math.floor(stats.damage * 0.75));
+  if (base.name === 'Blood Bullet') {
+    const sniper = game.buffs?.find(b => b.type === 'sniper' && b.stacks > 0);
+    const hasTrance = base.upgrades.some(up => up.name === "Sniper's Trance" && learnedUpgrades.includes(up.sp_id));
+    if (sniper && hasTrance) {
+      stats.range += sniper.stacks;
+      stats.damage += 10 * sniper.stacks;
+      requiresLos = false;
+    }
+  }
   if (base.name === 'Lumbriogenesis' && base.upgrades.some(up => up.name === 'Worm Host' && learnedUpgrades.includes(up.sp_id))) stats.max_charges = 0;
   const primaryTag = tags[0] || 'Arcane';
   const meta = TAG_META[primaryTag] || TAG_META.Arcane;

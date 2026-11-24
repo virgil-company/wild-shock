@@ -9,10 +9,11 @@ export function equipmentEvent(event, game, item, entry, ctx) {
   }
   if (stats.damage) stats.damage += entry.growth || 0;
   const { enemies, visible, spell, target, victim, rng, roll, summon, cast, hurt, dist, heal, act, afflict, pickup } = ctx;
+  const livingEnemies = () => game.enemies.filter(e => e.hp > 0);
   const species = item.summons?.[0];
-  const conjure = (n, pos = game.player, count = stats.num_summons || 1) => {
+  const conjure = (n, pos = game.player, count = stats.num_summons || 1, extraSpec = {}) => {
     for (let i = 0; i < count; i++) {
-      const ally = summon(n, pos, { hp: stats.minion_health, damage: stats.minion_damage, range: stats.minion_range, duration: stats.minion_duration });
+      const ally = summon(n, pos, { hp: stats.minion_health, damage: stats.minion_damage, range: stats.minion_range, duration: stats.minion_duration, ...extraSpec });
       if (ally && ingredients.includes("Familiar's Collar") && game.player.hp > 3) { game.player.hp -= 3; ally.soulbound = true; }
     }
   };
@@ -22,11 +23,29 @@ export function equipmentEvent(event, game, item, entry, ctx) {
   };
   if (event === 'enter') {
     entry.steps = 0;
+    entry.stored = 0;
+    entry.hits = {};
+    entry.turn = -1;
     if (name === 'Cage of Chimerae') for (const n of item.summons) conjure(n);
-    if (['Armor of Nanuk', 'Arbiter Cage', 'Knight Cage', 'Lava Cage'].includes(name)) conjure(species);
+    if (name === 'Armor of Nanuk') conjure(species);
+    if (name === 'Arbiter Cage' || name === 'Knight Cage' || name === 'Lava Cage') {
+      const [t1, t2] = { 'Arbiter Cage': ['Eye', 'Holy'], 'Knight Cage': ['Arcane', 'Metallic'], 'Lava Cage': ['Fire', 'Slime'] }[name];
+      const bonusHp = ctx.mastery(t1) * ctx.mastery(t2);
+      conjure(species, game.player, stats.num_summons || 1, bonusHp > 0 ? { bonusHp } : {});
+    }
     if (name === 'Dwarf Hat' && ctx.spells().length >= 7) conjure(species, game.player, 7);
     if (name === 'Timestriders') for (const e of enemies) afflict(e, 'stun', stats.duration);
     if (name === 'Brisingamen') for (const e of visible) afflict(e, 'berserk', stats.duration);
+    if (name === "Glasya's Bite") {
+      const bleedDuration = ctx.mastery('Blood') * ctx.mastery('Chaos');
+      if (bleedDuration > 0) for (const e of enemies) afflict(e, 'bleed', bleedDuration);
+    }
+    if (name === 'Crimson Torc') {
+      const bonusPct = ctx.mastery('Fire') * ctx.mastery('Blood');
+      if (bonusPct > 0) for (const tag of ['Fire', 'Blood']) {
+        game.buffs.push({ name, type: 'bonus', tag, stat: 'damage', percent: true, amount: bonusPct, duration: stats.duration || 3 });
+      }
+    }
     if (name === 'Boots of Imminent Doom') for (const e of enemies.filter(e => dist(game.player, e) <= stats.radius)) cast('Seal Fate', e);
     if (name === "Rod of Heaven's Assault") for (const e of visible.filter(e => e.tags.some(tag => ['Demon', 'Undead'].includes(tag)))) cast('Heavenly Blast', e);
     if (name === 'Codex of Chaotic Evolution') ctx.giveUpgrade(roll(ctx.spells().filter(s => s.upgrades.length > s.learnedUpgrades.length)));
@@ -36,7 +55,29 @@ export function equipmentEvent(event, game, item, entry, ctx) {
     }
     if (ingredients.includes('Luminous Threads') && item.bonuses.some(line => line.includes('Resist'))) game.player.shields += ctx.mastery('Holy');
   } else if (event === 'clear') {
+    entry.stored = 0;
+    entry.hits = {};
+    entry.turn = -1;
     if (stats.damage && ingredients.includes('Quipu Saga')) entry.growth = (entry.growth || 0) + 1;
+  } else if (event === 'summon') {
+    const ally = ctx.ally;
+    if (!ally) return;
+    if (name === "Iron Legion's Banner" && ally.tags?.some(t => t === 'Metallic' || t === 'Construct')) {
+      ally.shields = (ally.shields || 0) + 2;
+      afflict(ally, 'quickstep', stats.duration || 10);
+    }
+    if (name === 'Jaculus Idol' && ally.tags?.includes('Dragon')) {
+      afflict(ally, 'quickstep', Number.MAX_SAFE_INTEGER);
+    }
+    if (name === 'Magic Minion Shield') {
+      ally.shields = (ally.shields || 0) + (ally.tags?.includes('Arcane') ? 3 : 1);
+    }
+    if (name === 'Artificial Heart' && ally.tags?.includes('Construct') && !ally.tags.includes('Living')) {
+      ally.tags.push('Living');
+    }
+    if (name === 'The North Pole' && ally.tags?.includes('Metallic')) {
+      cast('Magnetize', ally);
+    }
   } else if (event === 'shard') {
     if (name.startsWith('Chalice of ')) {
       const tag = { 'Chalice of Light': 'Holy', 'Chalice of Warp': 'Translocation', 'Chalice of Dragons': 'Dragon', 'Chalice of Iron': 'Metallic' }[name];
@@ -62,34 +103,40 @@ export function equipmentEvent(event, game, item, entry, ctx) {
   } else if (event === 'damage') {
     const proc = desc.match(/^When an enemy takes \[(\w+)(?::\w+)?\] damage, it has a (\d+)% chance to be afflicted with \[\d+:duration\] turns? of \[(\w+)\]/i);
     if (proc && ctx.type === proc[1] && rng() * 100 < Number(proc[2])) afflict(victim, proc[3] === 'frozen' ? 'freeze' : proc[3], stats.duration);
-    const trigger = desc.match(/^For every (\d+) damage dealt (?:to enemies )?by \[(\w+)(?::\w+)?\] spells.*?, cast (.+?) on a random enemy/);
-    if (trigger && ctx.tags.includes(trigger[2])) {
+    const trigger = desc.match(/^For every (\d+) damage dealt (?:to enemies )?by \[(\w+)(?::\w+)?\] spells( or equipment)?.*?, cast (.+?) on a random enemy/);
+    if (trigger && ctx.tags.includes(trigger[2]) && (ctx.sourceKind === 'spell' || (!!trigger[3] && ctx.sourceKind === 'equipment'))) {
       const threshold = Number(trigger[1]);
       entry.stored = (entry.stored || 0) + ctx.amount;
       while (entry.stored >= threshold) {
         entry.stored -= threshold;
-        const e = roll(enemies.filter(e => e.hp > 0));
-        if (e) cast(trigger[3], e);
+        const e = roll(livingEnemies());
+        if (e) cast(trigger[4], e, { sourceEquipment: item.name });
       }
     }
-    if (name === 'Disintegrator' && ctx.tags.includes('Sorcery') || name === 'Amulet of Emerald Flame' && ctx.tags.includes('Enchantment')) {
+    if (ctx.sourceKind === 'spell' && (name === 'Disintegrator' && ctx.tags.includes('Sorcery') || name === 'Amulet of Emerald Flame' && ctx.tags.includes('Enchantment'))) {
       const threshold = name === 'Disintegrator' ? 40 : 50;
       entry.stored = (entry.stored || 0) + ctx.amount;
       while (entry.stored >= threshold) {
         entry.stored -= threshold;
-        if (name === 'Disintegrator') for (const e of enemies) hurt(e, 1, 'Physical');
-        else { const e = [...enemies].sort((a, b) => dist(game.player, a) - dist(game.player, b))[0]; if (e) hurt(e, stats.damage, 'Fire'); }
+        const alive = livingEnemies();
+        if (name === 'Disintegrator') for (const e of alive) hurt(e, 1, 'Physical');
+        else { const e = alive.sort((a, b) => dist(game.player, a) - dist(game.player, b))[0]; if (e) hurt(e, stats.damage, 'Fire'); }
       }
     }
-    if (name === 'Pyrophilia Locket' && ctx.type === 'Fire') for (const a of game.allies.filter(a => ctx.see(a, victim))) a.hp = Math.min(a.maxHp, a.hp + Math.floor(ctx.amount / 2));
-    if (name === "Conciliator's Claw" && dist(victim, game.player) <= 1) { heal(3); for (const a of game.allies.filter(a => ctx.see(a, game.player))) a.hp = Math.min(a.maxHp, a.hp + 3); }
-    if (name === 'Crackledarkener' && ctx.type === 'Dark' || name === 'Cracklevoid' && ctx.type === 'Arcane') for (const e of enemies.filter(e => e !== victim && ctx.see(victim, e) && dist(victim, e) <= stats.radius).slice(0, stats.num_targets)) hurt(e, ctx.amount, 'Lightning');
+    if (name === 'Pyrophilia Locket' && ctx.type === 'Fire') for (const a of game.allies.filter(a => a.hp > 0 && ctx.see(a, victim))) a.hp = Math.min(a.maxHp, a.hp + Math.floor(ctx.amount / 2));
+    if (name === "Conciliator's Claw" && dist(victim, game.player) <= 1) { heal(3); for (const a of game.allies.filter(a => a.hp > 0 && ctx.see(a, game.player))) a.hp = Math.min(a.maxHp, a.hp + 3); }
+    if (name === 'Crackledarkener' && ctx.type === 'Dark' || name === 'Cracklevoid' && ctx.type === 'Arcane') for (const e of livingEnemies().filter(e => e !== victim && ctx.see(victim, e) && dist(victim, e) <= stats.radius).slice(0, stats.num_targets)) hurt(e, ctx.amount, 'Lightning');
     if (name === 'Scepter of Sorrows' || name === 'Ghostfire Scepter') {
       const element = name === 'Scepter of Sorrows' ? 'Ice' : 'Fire';
       if (ctx.type === 'Dark' || ctx.type === element) {
-        if (entry.turn !== game.turn) { entry.turn = game.turn; entry.hits = {}; }
-        if (entry.hits[victim.id] && entry.hits[victim.id] !== ctx.type) { conjure(species, victim); delete entry.hits[victim.id]; }
-        else entry.hits[victim.id] = ctx.type;
+        const turnId = ctx.turnId;
+        if (entry.turn !== turnId) { entry.turn = turnId; entry.hits = {}; }
+        const rec = entry.hits[victim.id] ??= { types: [], triggered: false };
+        if (!rec.types.includes(ctx.type)) rec.types.push(ctx.type);
+        if (!rec.triggered && rec.types.includes('Dark') && rec.types.includes(element)) {
+          rec.triggered = true;
+          conjure(species, victim);
+        }
       }
     }
   } else if (event === 'allyHit') {
@@ -99,22 +146,23 @@ export function equipmentEvent(event, game, item, entry, ctx) {
       const a = roll(game.allies.filter(a => a.hp > 0));
       if (a) { const n = Math.floor(victim.maxHp / 2); a.maxHp += n; a.hp += n; }
     }
-    if (name === 'Icy Vengeance Icon') for (const e of enemies.filter(e => dist(e, victim) <= stats.radius).slice(0, stats.num_targets)) hurt(e, Math.floor(victim.maxHp / 2), 'Ice');
+    if (name === 'Icy Vengeance Icon') for (const e of livingEnemies().filter(e => dist(e, victim) <= stats.radius).slice(0, stats.num_targets)) hurt(e, Math.floor(victim.maxHp / 2), 'Ice');
   } else if (event === 'kill') {
     const type = victim.lastDamageType;
     const sigil = desc.match(/^For every \[(\w+):\w+\] unit that dies, one of your \[(\w+)\] spells regains/);
     if (sigil && victim.tags?.includes(sigil[1])) randomCharge(ctx.spells().filter(s => s.tags.includes(sigil[2])));
     if (name === 'Orb of Infinite Slaughter') {
-      if (entry.explosionTurn !== game.turn) { entry.explosionTurn = game.turn; entry.explosions = 0; }
+      const turnId = ctx.turnId;
+      if (entry.explosionTurn !== turnId) { entry.explosionTurn = turnId; entry.explosions = 0; }
       if (entry.explosions++ >= 1000) return;
       const amount = ctx.mastery('Blood');
-      for (const e of enemies.filter(e => dist(e, victim) <= 1)) heal(hurt(e, amount, 'Dark'));
+      for (const e of livingEnemies().filter(e => dist(e, victim) <= 1)) heal(hurt(e, amount, 'Dark'));
     }
     if (name === 'Robe of Storms' && ['Ice', 'Lightning'].includes(type)) game.player.shields++;
     if (name === 'Spawning Venom' && type === 'Poison') conjure('Giant Spider', victim);
     if (name === 'Soul Harvester' && rng() < .1) for (const s of ctx.spells().filter(s => s.tags.some(t => ['Holy', 'Dark'].includes(t)))) game.charges[s.id] = Math.min(s.maxCharges, game.charges[s.id] + 1);
     if (name.endsWith(' Links') && desc.split('damage,')[0].includes('[' + type)) {
-      const other = roll(enemies.filter(e => dist(e, victim) <= stats.radius && ctx.see(e, victim)));
+      const other = roll(livingEnemies().filter(e => dist(e, victim) <= stats.radius && ctx.see(e, victim)));
       if (other) hurt(other, stats.damage, type);
     }
   } else if (event === 'cast') {
@@ -152,7 +200,12 @@ export function equipmentEvent(event, game, item, entry, ctx) {
     }
   } else if (event === 'turn' && enemies.length) {
     if (name === 'Explosive Spore Manual') cast('Combust Poison', game.player);
-    if (name === 'Fanged Amulet') { const e = roll(enemies.filter(e => dist(game.player, e) <= 1)); if (e) heal(hurt(e, ctx.mastery('Blood'), 'Physical')); }
+    if (name === 'Fanged Amulet') { const e = roll(livingEnemies().filter(e => dist(game.player, e) <= 1)); if (e) heal(hurt(e, ctx.mastery('Blood'), 'Physical')); }
+    if (name === 'Galvanic Blade') {
+      const dmg = ctx.mastery('Lightning') * ctx.mastery('Metallic');
+      const e = dmg > 0 && roll(livingEnemies().filter(e => dist(game.player, e) <= 1));
+      if (e) { hurt(e, dmg, 'Physical'); hurt(e, dmg, 'Lightning'); }
+    }
     if (name === 'Shattering Frost Manual') cast('Shatter', game.player);
     if (name === 'Crown of Ragnarok' && game.realmTurn === 9) for (let i = 0; i < stats.num_targets; i++) for (const s of ['Earthquake', 'Flame Burst', 'Storm Burst']) cast(s, game.player);
     if (name === 'Earthmeld Boots' && game.movedAt !== game.turn) heal(3);
@@ -173,9 +226,10 @@ export function equipmentEvent(event, game, item, entry, ctx) {
     if (name === 'Arcane Accelerator') for (const a of game.allies.filter(a => ctx.see(a, game.player))) for (const k in a.cooldowns) a.cooldowns[k]--;
     if (name === 'Chaos Scale Crown' || name === 'Moon Crown' || name === 'Crown of Bony Fingers') {
       const [tag, s] = { 'Chaos Scale Crown': ['Dragon', 'Annihilate'], 'Moon Crown': ['Holy', 'Void Beam'], 'Crown of Bony Fingers': ['Undead', 'Touch of Death'] }[name];
-      const a = roll(game.allies.filter(a => a.tags.includes(tag)));
-      const e = a && roll(enemies.filter(e => ctx.see(a, e)));
-      if (e) cast(s, e);
+      const a = roll(game.allies.filter(a => a.hp > 0 && a.tags.includes(tag)));
+      const sp = ctx.spellInfo ? ctx.spellInfo(s) : null;
+      const e = a && roll(livingEnemies().filter(e => !sp?.requiresLos || ctx.see(a, e)));
+      if (e) cast(s, e, { caster: a, sourceEquipment: item.name, enforceLos: true });
     }
     if (name === 'Hex Specialist\'s Ring') for (const e of enemies) hurt(e, Object.values(e.statuses).filter(n => n > 0).length * stats.damage, 'Arcane');
     if (name === 'Hellfire Mantle') for (const e of enemies.filter(e => dist(game.player, e) <= stats.radius)) hurt(e, stats.damage, 'Fire');

@@ -10,10 +10,11 @@ import { enhanceSpell } from './artifacts.js';
 import {
   addComponent, forge as forgeEquipment, equipItem, equipmentByName, componentByName, spellById,
   effectiveRw3Spell, canLearnRw3Spell, canLearnRw3Upgrade,
-  getEquipmentModifiers, computeElementalDamage,
+  getEquipmentModifiers, computeElementalDamage, tagMastery,
   knownSpellIds, transmutationChoices, getEquippedItems, spellByName, rw3Spells, rw3Equipment, rw3Tags,
   SHRINE_TYPES, CLOUD_TYPES, getModeConfig, GAME_MODES,
 } from './rw3.js';
+export { tagMastery };
 
 const SAVE_VERSION = 2;
 export const SIZE = 23;
@@ -46,7 +47,7 @@ export function createGame(seed = Date.now() % 2147483647, { mode = 'standard', 
     player: { x: 3, y: 11, hp: 55, shield: 0, shields: isRw3Mode ? 2 : 0, resistances: {}, statuses: {} },
     mutators: chooseMutators(mode, selectedMutators, random(seed)), vault: null, defeatedSpecies: [], clearedVaults: [],
     riftRoll: 0, rerolls: 1, rerolledRealms: [], pendingReward: null,
-    offeringTags: [], realmTurn: 0, lastCast: null,
+    offeringTags: [], realmTurn: 0, lastCast: null, lastEffect: null, damagedPlayerBy: null,
     bonusMaxHp: 0, allies: [], clouds: [], buffs: [], channel: null, quickstepUsed: false,
     charges: {}, potions: cfg.potions ? 3 : 0, kills: 0, status: 'playing', log: [], effects: [], theme: 0,
     progress: { damageDealt: 0, pointsEarned: 0, pointsSpent: 0, spellsCast: 0, staffStrikes: 0, potionsUsed: 0, realmsCleared: 0 },
@@ -119,6 +120,8 @@ export function generateRealm(game) {
   const isFinalBossRealm = game.realm === finalRealm;
   game.realmTurn = 0;
   game.lastCast = null;
+  game.lastEffect = null;
+  game.damagedPlayerBy = null;
   const roster = encounterTable(game.realm, finalRealm, rng, game.theme);
   const bossChoiceRealm = cfg.id !== 'standard' && game.realm === 20;
   if (bossChoiceRealm) {
@@ -179,7 +182,7 @@ export function generateRealm(game) {
   }
 
   if (game.vault === 'the Fettered Fae') {
-    const ally = spawnAlly(game, position(), { ...unitStats(units.get('Fae Queen')), name: 'Great Faery' });
+    const ally = spawnAlly(game, position(), { ...unitStats(units.get('Fae Queen')), name: 'Great Faery', skipSummonHooks: true });
     ally.rescue = true;
   } else if (!game.vault && game.realm % 5 === 3) {
     game.items.push({ ...position(), type: 'companion', name: pick(companions, rng).name });
@@ -209,7 +212,7 @@ export function generateRealm(game) {
 function enterRealmEffects(game) {
   const drake = spellByName.get('Void Drake');
   if (game.rw3Upgrades[drake.id]?.includes(drake.upgrades.find(u => u.name === 'Void Mutations').sp_id)) {
-    const mastery = availableSpells(game).filter(s => s.tags.includes('Arcane')).reduce((n,s) => n + s.level, 0);
+    const mastery = tagMastery(game, 'Arcane');
     const boost = game.spellBoosts['rw3-' + drake.id] ??= {};
     boost.voidMutations = (boost.voidMutations || 0) + mastery;
   }
@@ -342,17 +345,106 @@ export function learnRw3Upgrade(game, spellId, spId) {
 
 function awardPoints(game, amount) { game.points += amount; game.progress.pointsEarned += amount; }
 
-function damageEnemy(game, enemy, amount, damageType = null, pierce = 0, secondary = false) {
+const DEBUFF_STATUSES = new Set([
+  'burn', 'immolate', 'poison', 'bleed', 'freeze', 'refreezing', 'stun', 'petrify', 'glassed',
+  'blind', 'fear', 'berserk', 'silence', 'soaked', 'acidified', 'immobilized', 'shock', 'sleep',
+  'necrosis', 'armor_melted', 'twilight', 'pyrostatic', 'sharedPain',
+]);
+const endTurnState = new WeakSet();
+const actionStack = new WeakMap();
+const retaliatingUnits = new WeakMap();
+
+function currentTurnId(game) {
+  return endTurnState.has(game) ? Math.max(0, game.turn - 1) : game.turn;
+}
+
+function currentAction(game) {
+  const stack = actionStack.get(game);
+  return stack?.length ? stack[stack.length - 1] : null;
+}
+
+function withActionContext(game, ctx, fn) {
+  let stack = actionStack.get(game);
+  if (!stack) { stack = []; actionStack.set(game, stack); }
+  stack.push(ctx);
+  try { return fn(); }
+  finally { stack.pop(); }
+}
+
+function unitDescriptor(game, unit) {
+  if (!unit) return { id: null, kind: null, name: null };
+  if (unit === game.player) return { id: 'player', kind: 'player', name: 'Wizard' };
+  if (game.allies?.includes(unit)) return { id: unit.id, kind: 'ally', name: unit.name || unit.species || 'Ally' };
+  if (game.enemies?.includes(unit)) return { id: unit.id, kind: 'enemy', name: unit.name || unit.species || 'Enemy' };
+  return { id: unit.id ?? null, kind: unit.species ? 'unit' : null, name: unit.name || unit.species || null };
+}
+
+function buildEffectRecord(game, target, damageType, dealt, ctx = null) {
+  const active = ctx || currentAction(game) || {};
+  const casterDesc = unitDescriptor(game, active.caster);
+  const targetDesc = unitDescriptor(game, target);
+  return {
+    turn: currentTurnId(game),
+    casterId: casterDesc.id,
+    casterKind: casterDesc.kind,
+    casterName: casterDesc.name,
+    targetId: targetDesc.id,
+    targetKind: targetDesc.kind,
+    targetName: targetDesc.name,
+    sourceKind: active.sourceKind || null,
+    sourceName: active.sourceName || null,
+    sourceTags: [...(active.sourceTags || [])],
+    sourceEquipment: active.sourceEquipment || null,
+    damageType: damageType || null,
+    dealt,
+    manual: !!active.manual,
+  };
+}
+
+function clearSniperTrance(game) {
+  if (game.buffs?.some(b => b.type === 'sniper')) {
+    game.buffs = game.buffs.filter(b => b.type !== 'sniper');
+  }
+}
+
+function applyStatus(game, unit, status, duration) {
+  if (!unit || !status || !(duration > 0)) return false;
+  unit.statuses ??= {};
+  const isDebuff = DEBUFF_STATUSES.has(status);
+  if (isDebuff) {
+    if (unit === game.player) {
+      if (game.buffs?.some(b => b.type === 'purity')) return false;
+      if (status === 'freeze' && equipped(game, 'Molten Carapace')) return false;
+      if (status === 'fear' && equipped(game, 'Cold Iron Heart')) return false;
+      if (status === 'silence' && equipped(game, "Runespeaker's Gorget")) return false;
+      if (status === 'blind' && equipped(game, 'Sunforged Iris')) return false;
+    }
+    if (unit.species === 'Snow Queen, Dethroned' && unit.shields > 0) return false;
+    if (unit.species === 'Gelid Mirror') {
+      unit.reflectedDebuffs ??= {};
+      unit.reflectedDebuffs[status] = Math.max(unit.reflectedDebuffs[status] || 0, duration);
+      return false;
+    }
+  }
+  unit.statuses[status] = Math.max(unit.statuses[status] || 0, duration);
+  return true;
+}
+
+function damageEnemy(game, enemy, amount, damageType = null, pierce = 0, secondary = false, meta = null) {
   if (enemy.hp <= 0) return 0;
-  if (enemy.name === 'Amaru' && game.castingTags?.some(t => t === 'Sorcery' || t === 'Enchantment')) return 0;
+  const active = currentAction(game);
+  const ctx = meta ? { ...(active || {}), ...meta } : (active || { caster: game.player, sourceKind: game.castingTags ? 'spell' : null, sourceTags: game.castingTags || [], manual: false });
+  const tags = ctx.sourceTags || game.castingTags || [];
+  if (enemy.name === 'Amaru' && tags.some(t => t === 'Sorcery' || t === 'Enchantment')) return 0;
   if (enemy.name === 'Ophan') {
     const guard = game.enemies.find(e => e.name !== 'Ophan' && e.hp > 0);
-    if (guard) return damageEnemy(game, guard, amount, damageType, pierce, true);
+    if (guard) return damageEnemy(game, guard, amount, damageType, pierce, true, ctx);
   }
   let finalAmount = damageType ? computeElementalDamage(amount, damageType, enemy, pierce) : Math.max(0, amount);
   if (finalAmount <= 0) return 0;
   if (enemy.shields > 0 && damageType) {
     enemy.shields--;
+    game.lastEffect = buildEffectRecord(game, enemy, damageType, 0, ctx);
     game.effects.push({ x: enemy.x, y: enemy.y, color: '#7dd3fc' });
     return 0;
   }
@@ -364,25 +456,43 @@ function damageEnemy(game, enemy, amount, damageType = null, pierce = 0, seconda
   }
   const dealt = Math.min(enemy.hp, finalAmount);
   if (damageType === 'Arcane') for (const whale of game.allies.filter(a => a.hp > 0 && a.starbask)) {
-    const amount = Math.floor(dealt / 2);
-    whale.hp = Math.min(whale.maxHp, whale.hp + amount); game.player.hp = Math.min(maxHealth(game), game.player.hp + amount);
+    const healAmt = Math.floor(dealt / 2);
+    whale.hp = Math.min(whale.maxHp, whale.hp + healAmt); game.player.hp = Math.min(maxHealth(game), game.player.hp + healAmt);
   }
   if (dealt && damageType && ['Jormungandr', 'Insanity Queen', 'Maweth'].includes(enemy.name)) {
     enemy.temporaryResistance = { tag: damageType, amount: { Jormungandr: 10, 'Insanity Queen': 25, Maweth: 20 }[enemy.name], expires: game.turn + 1 };
   }
-  if (dealt > 0) { delete enemy.statuses.sleep; enemy.lastDamageType = damageType; }
   enemy.hp -= dealt; game.progress.damageDealt += dealt;
+  if (dealt > 0) {
+    delete enemy.statuses.sleep;
+    enemy.lastDamageType = damageType;
+    const record = buildEffectRecord(game, enemy, damageType, dealt, ctx);
+    game.lastEffect = record;
+    enemy.lastHit = record;
+    if (enemy.hp <= 0) {
+      enemy.killedBy = record;
+      if (ctx.caster && game.allies.includes(ctx.caster)) ctx.caster.kills = (ctx.caster.kills || 0) + 1;
+    }
+  }
   // Fire or Physical hit breaks freeze (RW3 shatter interaction)
   if ((damageType === 'Fire' || damageType === 'Physical') && enemy.statuses?.freeze > 0) {
     enemy.statuses.freeze = 0;
   }
   if (!secondary && dealt) {
-    equipmentAction(game, 'damage', { victim: enemy, amount: dealt, type: damageType, tags: game.castingTags || [] });
+    equipmentAction(game, 'damage', {
+      victim: enemy, amount: dealt, type: damageType, tags,
+      sourceKind: ctx.sourceKind || (game.castingTags ? 'spell' : null),
+      sourceName: ctx.sourceName || null,
+      sourceEquipment: ctx.sourceEquipment || null,
+      caster: ctx.caster || null,
+      manual: !!ctx.manual,
+      effect: enemy.lastHit,
+    });
     const others = game.enemies.filter(e => e !== enemy && e.hp > 0);
-    if (enemy.sharedPain || enemy.statuses.sharedPain) for (const e of others.filter(e => e.sharedPain || e.statuses.sharedPain)) damageEnemy(game, e, dealt, damageType, 0, true);
+    if (enemy.sharedPain || enemy.statuses.sharedPain) for (const e of others.filter(e => e.sharedPain || e.statuses.sharedPain)) damageEnemy(game, e, dealt, damageType, 0, true, ctx);
     const carnival = game.buffs.find(b => b.type === 'carnival');
     if (carnival && ['Physical', 'Fire', 'Lightning'].includes(damageType)) {
-      for (const e of others.filter(e => hasSight(game, enemy, e)).sort((a, b) => distance(enemy, a) - distance(enemy, b)).slice(0, carnival.targets)) damageEnemy(game, e, Math.floor(dealt / 2), 'Dark', 0, true);
+      for (const e of others.filter(e => hasSight(game, enemy, e)).sort((a, b) => distance(enemy, a) - distance(enemy, b)).slice(0, carnival.targets)) damageEnemy(game, e, Math.floor(dealt / 2), 'Dark', 0, true, ctx);
     }
     if (['Arcane', 'Lightning'].includes(damageType)) for (const b of game.buffs.filter(b => b.type === 'garden')) {
       b.stored += dealt;
@@ -391,28 +501,40 @@ function damageEnemy(game, enemy, amount, damageType = null, pierce = 0, seconda
     if (damageType === 'Fire') {
       for (const b of game.buffs.filter(b => b.type === 'searing')) b.stored += dealt;
       const curse = enemy.curses?.['Pyrostatic Curse'];
-      if (curse) for (const e of others.filter(e => hasSight(game, enemy, e)).slice(0, curse.targets)) damageEnemy(game, e, dealt, 'Lightning', 0, true);
+      if (curse) for (const e of others.filter(e => hasSight(game, enemy, e)).slice(0, curse.targets)) damageEnemy(game, e, dealt, 'Lightning', 0, true, ctx);
     }
     if (damageType === 'Holy' && enemy.curses?.Sanction) {
-      damageEnemy(game, enemy, enemy.curses.Sanction.damage, 'Holy', 0, true);
+      damageEnemy(game, enemy, enemy.curses.Sanction.damage, 'Holy', 0, true, ctx);
       game.player.hp = Math.min(maxHealth(game), game.player.hp + 1);
     }
   }
   return dealt;
 }
 
-function damageAlly(game, ally, amount, damageType = 'Physical') {
+function damageAlly(game, ally, amount, damageType = 'Physical', source = null, meta = null) {
   amount = computeElementalDamage(amount, damageType, ally);
   if (!amount || ally.hp <= 0) return 0;
-  if (ally.shields > 0) { ally.shields--; return 0; }
+  const active = currentAction(game);
+  const ctx = meta ? { ...(active || {}), ...meta } : (active || (source ? { caster: source, sourceKind: 'unit', sourceName: source.name || source.species, sourceTags: source.tags || [], manual: false } : {}));
+  if (ally.shields > 0) {
+    ally.shields--;
+    game.lastEffect = buildEffectRecord(game, ally, damageType, 0, ctx);
+    return 0;
+  }
   const dealt = Math.min(Math.max(0, ally.hp - (ally.soulbound && game.player.hp > 0 ? 1 : 0)), amount);
   ally.hp -= dealt;
+  if (dealt > 0) {
+    const record = buildEffectRecord(game, ally, damageType, dealt, ctx);
+    game.lastEffect = record;
+    ally.lastHit = record;
+    if (ally.hp <= 0) ally.killedBy = record;
+  }
   if (ally.orb === 'Orb of Reflection') {
     const opposite = { Fire: 'Ice', Ice: 'Fire', Lightning: 'Physical', Physical: 'Lightning', Dark: 'Holy', Holy: 'Dark', Poison: 'Arcane', Arcane: 'Poison' };
     for (const e of game.enemies.filter(e => e.hp > 0 && hasSight(game, ally, e))) {
       orbDamage(game, ally, e, dealt, damageType);
       if (ally.upgrades.includes('Inverted Mirror')) orbDamage(game, ally, e, dealt, opposite[damageType]);
-      if (ally.hp <= 0 && ally.upgrades.includes('Shattered Orb')) e.statuses.bleed = Number.MAX_SAFE_INTEGER;
+      if (ally.hp <= 0 && ally.upgrades.includes('Shattered Orb')) applyStatus(game, e, 'bleed', Number.MAX_SAFE_INTEGER);
     }
   }
   if (!ally.hp && ally.upgrades?.includes('Supercritical')) for (const e of game.enemies) {
@@ -421,14 +543,20 @@ function damageAlly(game, ally, amount, damageType = 'Physical') {
   return dealt;
 }
 
-function damagePlayer(game, amount, damageType = 'Physical', source = null) {
+function damagePlayer(game, amount, damageType = 'Physical', source = null, meta = null) {
   const scaled = damageType ? computeElementalDamage(amount, damageType, game.player, 0, game) : amount;
   if (scaled <= 0) return 0;
   if (game.channel && game.channel.invulnerable) return 0;
+  const active = currentAction(game);
+  const ctx = meta ? { ...(active || {}), ...meta } : (active || (source ? { caster: source, sourceKind: 'unit', sourceName: source.name || source.species, sourceTags: source.tags || [], manual: false } : {}));
   if (game.player.shields > 0) {
     game.player.shields--;
-    if (source && game.buffs.some(b => b.reflect)) damageEnemy(game, source, amount, damageType);
-    if (source && equipped(game, 'Boreal Armor')) damageEnemy(game, source, 12, 'Ice');
+    game.lastEffect = buildEffectRecord(game, game.player, damageType, 0, ctx);
+    if (source && game.buffs.some(b => b.reflect)) damageEnemy(game, source, amount, damageType, 0, false, { caster: game.player, sourceKind: 'spell', sourceName: 'Arcane Warding', sourceTags: ['Arcane', 'Enchantment'], manual: false });
+    if (source && equipped(game, 'Boreal Armor')) {
+      const boreal = equipmentByName.get('Boreal Armor');
+      damageEnemy(game, source, 12, 'Ice', 0, false, { caster: game.player, sourceKind: 'equipment', sourceName: boreal.name, sourceTags: boreal.tags, sourceEquipment: boreal.name, manual: false });
+    }
     log(game, 'log.shieldBlock', {}, 'gold');
     return 0;
   }
@@ -437,12 +565,20 @@ function damagePlayer(game, amount, damageType = 'Physical', source = null) {
   game.player.hp = Math.max(0, game.player.hp - incoming + absorbed);
   const dealt = incoming - absorbed;
   if (dealt) {
+    const record = buildEffectRecord(game, game.player, damageType, dealt, ctx);
+    game.lastEffect = record;
+    game.player.lastHit = record;
+    if (source && game.enemies.includes(source)) {
+      const tid = currentTurnId(game);
+      if (game.damagedPlayerBy?.turn !== tid) game.damagedPlayerBy = { turn: tid, ids: [] };
+      if (!game.damagedPlayerBy.ids.includes(source.id)) game.damagedPlayerBy.ids.push(source.id);
+    }
     if (equipped(game, 'Mask of Nihilo')) game.player.resistances[damageType] = (game.player.resistances[damageType] || 0) - dealt;
     for (const copy of Object.values(game.equipment)) {
       if (equipmentByName.get(copy.name)?.tags.includes('Blood') && copy.components.includes('Bloodrage Serum')) game.buffs.push({ name: 'Bloodrage', type: 'bonus', stat: 'damage', amount: 1, duration: 3 });
     }
-    if (game.buffs.some(b => b.type === 'Pain Mirror')) for (const e of game.enemies.filter(e => hasSight(game, game.player, e))) damageEnemy(game, e, dealt, 'Dark');
-    if (source && game.buffs.some(b => b.name === 'Golden Dragonscale')) damageEnemy(game, source, 10, 'Holy');
+    if (game.buffs.some(b => b.type === 'Pain Mirror')) for (const e of game.enemies.filter(e => hasSight(game, game.player, e))) damageEnemy(game, e, dealt, 'Dark', 0, false, { caster: game.player, sourceKind: 'spell', sourceName: 'Pain Mirror', sourceTags: ['Blood', 'Dark', 'Enchantment'], manual: false });
+    if (source && game.buffs.some(b => b.name === 'Golden Dragonscale')) damageEnemy(game, source, 10, 'Holy', 0, false, { caster: game.player, sourceKind: 'component', sourceName: 'Golden Dragonscale', sourceTags: ['Holy', 'Dragon'], manual: false });
     const shard = game.buffs.find(b => b.name === 'Fulminite Shard' && b.last !== game.turn);
     if (source && shard) { shard.last = game.turn; freeCast(game, 'Chain Lightning', source); }
   }
@@ -469,25 +605,37 @@ function findOpenTileNear(game, origin, maxDist = 2, flying = false, unit = null
 
 function spawnAlly(game, pos, spec) {
   game.allies ??= [];
+  const baseHp = Math.max(1, (spec.hp || 12) + (spec.bonusHp || 0));
   const ally = {
     id: `ally-${game.turn}-${game.allies.length}-${(game.nextAllyId = (game.nextAllyId || 0) + 1)}`,
     species: spec.species || null, cooldowns: {}, stationary: !!spec.stationary,
     radius: spec.radius || 0, lives: spec.lives || 0, regen: spec.regen || 0, shieldRegen: spec.shieldRegen || 0,
     name: spec.name || 'Summon',
     x: pos.x, y: pos.y,
-    hp: Math.max(1, spec.hp || 12), maxHp: Math.max(1, spec.hp || 12),
+    hp: baseHp, maxHp: baseHp,
     damage: Math.max(0, spec.damage ?? 5),
     range: Math.max(1, spec.range || 1),
     shields: spec.shields || 0,
     duration: spec.duration || 0,
-    tags: spec.tags || ['Conjuration'],
+    tags: [...(spec.tags || ['Conjuration'])],
     flying: !!spec.flying,
     statuses: {},
-    resistances: spec.resistances || {},
+    resistances: { ...(spec.resistances || {}) },
     color: spec.color || '#4ade80',
     icon: spec.icon || '♙',
   };
   game.allies.push(ally);
+  if (!spec.skipSummonHooks) {
+    equipmentAction(game, 'summon', { ally });
+    const clawBase = spellByName.get('Dragon Claw');
+    const tutorUp = clawBase?.upgrades.find(u => u.name === 'Dragon Tutor');
+    if (tutorUp && knownSpellIds(game).includes(clawBase.id) && game.rw3Upgrades[clawBase.id]?.includes(tutorUp.sp_id)) {
+      const def = units.get(ally.species);
+      if (ally.tags.includes('Dragon') && def?.abilities?.some(a => a.melee)) {
+        ally.dragonTutor = true;
+      }
+    }
+  }
   return ally;
 }
 
@@ -523,7 +671,7 @@ function finishRealm(game) {
   const rescued = game.allies.find(a => a.rescue && a.hp > 0);
   if (rescued) recruitCompanion(game, rescued.species, rescued.name, rescued);
   if (game.vault && (game.vault !== 'the Fettered Fae' || rescued) && !game.clearedVaults.includes(game.vault)) game.clearedVaults.push(game.vault);
-  game.allies = []; game.clouds = []; game.channel = null;
+  game.allies = []; game.clouds = []; game.channel = null; game.damagedPlayerBy = null;
   game.buffs = (game.buffs || []).filter(b => b.name === 'Relocator Beacon');
   if (!game.portals.length) {
     const pos = findOpenTileNear(game, game.player, SIZE) || game.player;
@@ -541,21 +689,53 @@ function finishRealm(game) {
 
 function onUnitDeath(game, unit, allied) {
   const nearby = [game.player, ...game.allies, ...game.enemies].filter(u => u !== unit && u.hp > 0);
-  for (const passive of units.get(unit.species)?.passives || []) {
-    for (const rule of deathSummons(passive)) {
-      for (let i = 0; i < rule.count; i++) (allied ? summonCreature : spawnHostile)(game, rule.name, unit);
+  const foes = allied ? game.enemies.filter(u => u !== unit && u.hp > 0) : [game.player, ...game.allies].filter(u => u !== unit && u.hp > 0);
+  const friends = allied ? [game.player, ...game.allies].filter(u => u !== unit && u.hp > 0) : game.enemies.filter(u => u !== unit && u.hp > 0);
+  const deal = (u, amount, type) => {
+    if (u === game.player) return damagePlayer(game, amount, type, unit);
+    return game.enemies.includes(u) ? damageEnemy(game, u, amount, type) : damageAlly(game, u, amount, type, unit);
+  };
+  withActionContext(game, {
+    caster: unit, sourceKind: 'unit', sourceName: unit.species || unit.name, sourceTags: unit.tags || [], manual: false,
+  }, () => {
+    if (unit.species === 'Ice Phoenix') {
+      for (const u of foes.filter(u => distance(u, unit) <= 4)) {
+        deal(u, 25, 'Ice');
+        if (u.hp > 0) applyStatus(game, u, 'freeze', 4);
+      }
+      for (const u of friends.filter(u => distance(u, unit) <= 4)) {
+        u.shields = (u.shields || 0) + 2;
+      }
+    } else if (unit.species === 'Phoenix') {
+      for (const u of foes.filter(u => distance(u, unit) <= 4)) deal(u, 25, 'Fire');
+      for (const u of friends.filter(u => distance(u, unit) <= 4)) {
+        const cap = u === game.player ? maxHealth(game) : u.maxHp;
+        u.hp = Math.min(cap, u.hp + 25);
+      }
+    } else if (unit.species === 'Void Phoenix' || unit.species === 'Rotting Phoenix') {
+      for (const p of areaCells(unit, 5)) if (game.tiles[p.y]?.[p.x] === 1) game.tiles[p.y][p.x] = 0;
+      const types = unit.species === 'Void Phoenix' ? ['Arcane'] : ['Dark', 'Fire'];
+      for (const u of foes.filter(u => distance(u, unit) <= 5)) for (const t of types) deal(u, 25, t);
+      for (const u of friends.filter(u => distance(u, unit) <= 5)) {
+        if (unit.species === 'Void Phoenix') u.shields = (u.shields || 0) + 2;
+        else if (u.tags?.includes('Undead')) { u.maxHp += 25; u.hp += 25; }
+      }
     }
-    const blast = passive.match(/^On death, deal (\d+) \[(\w+)(?::\w+)?\] damage to units within (\d+)/);
-    if (blast) for (const u of nearby.filter(u => distance(u,unit) <= Number(blast[3]))) {
-      if (u === game.player) damagePlayer(game, Number(blast[1]), blast[2]);
-      else (game.enemies.includes(u) ? damageEnemy : damageAlly)(game, u, Number(blast[1]), blast[2]);
+    for (const passive of units.get(unit.species)?.passives || []) {
+      for (const rule of deathSummons(passive)) {
+        for (let i = 0; i < rule.count; i++) (allied ? summonCreature : spawnHostile)(game, rule.name, unit);
+      }
+      const blast = passive.match(/^On death, deal (\d+) \[(\w+)(?::\w+)?\] damage to units within (\d+)/);
+      if (blast) for (const u of nearby.filter(u => distance(u, unit) <= Number(blast[3]))) {
+        deal(u, Number(blast[1]), blast[2]);
+      }
+      const affliction = passive.match(/^On death, apply (\w+) to adjacent units for (\d+) turns/);
+      if (affliction) {
+        const st = ({ Stunned: 'stun', Hemorrhage: 'bleed' })[affliction[1]] || affliction[1].toLowerCase();
+        for (const u of nearby.filter(u => distance(u, unit) <= 1)) applyStatus(game, u, st, Number(affliction[2]));
+      }
     }
-    const affliction = passive.match(/^On death, apply (\w+) to adjacent units for (\d+) turns/);
-    if (affliction) {
-      const st = ({ Stunned: 'stun', Hemorrhage: 'bleed' })[affliction[1]] || affliction[1].toLowerCase();
-      for (const u of nearby.filter(u => distance(u,unit) <= 1)) u.statuses[st] = Math.max(u.statuses[st] || 0, Number(affliction[2]));
-    }
-  }
+  });
 }
 
 function cleanup(game) {
@@ -575,8 +755,9 @@ function cleanup(game) {
         e.shields += allies.length; for (const other of allies) other.hp = 0;
       }
     } else if (e.lives > 0) {
-      e.lives--; e.hp = e.maxHp;
-      if (e.name === 'Insanity Queen') for (const a of game.allies.filter(a => a.tags.includes('Living') && hasSight(game, e, a))) a.statuses.berserk = 12;
+      onUnitDeath(game, e, false);
+      if (e.name === 'Insanity Queen') for (const a of game.allies.filter(a => a.hp > 0 && a.tags.includes('Living') && hasSight(game, e, a))) applyStatus(game, a, 'berserk', 12);
+      e.lives--; e.hp = e.maxHp; e.statuses = {}; delete e.curses; delete e.killedBy;
     }
   }
   const dead = game.enemies.filter(e => e.hp <= 0); game.kills += dead.length;
@@ -585,12 +766,12 @@ function cleanup(game) {
     for (const name of [...(enemy.previousForms || []), enemy.species]) if (name && !game.defeatedSpecies.includes(name)) game.defeatedSpecies.push(name);
     log(game, 'log.fall', { enemy: enemy.species || (enemy.isSpawner ? enemy.name : textRef(enemyNameKey(enemy))) }, 'green');
     onUnitDeath(game, enemy, false);
-    equipmentAction(game, 'kill', { victim: enemy });
+    equipmentAction(game, 'kill', { victim: enemy, cause: enemy.killedBy || null });
     if (game.buffs.some(b => b.type === 'The Restless Dead') && enemy.tags?.includes('Living')) summonCreature(game, 'Skeleton', enemy, { hp: enemy.maxHp, flying: enemy.flying });
     if (enemy.curses?.Mercurize) summonCreature(game, 'Mercurial Geist', enemy, { hp: enemy.maxHp, duration: 10 });
     if (enemy.curses?.['Death Chill']) {
       const curse = enemy.curses['Death Chill'];
-      for (const e of game.enemies.filter(e => e.hp > 0 && distance(e, enemy) <= curse.radius)) { damageEnemy(game, e, curse.damage, 'Ice'); e.statuses.freeze = 5; }
+      for (const e of game.enemies.filter(e => e.hp > 0 && distance(e, enemy) <= curse.radius)) { damageEnemy(game, e, curse.damage, 'Ice'); applyStatus(game, e, 'freeze', 5); }
     }
     if (enemy.species?.startsWith('Mordred') && game.player.hp <= 0) game.mutualDestruction = true;
     if (game.allies.some(a => a.hp > 0 && a.dream && a.hungeringDepths) && areaCells(enemy,1).some(p => game.tiles[p.y][p.x] === 2)) freeCast(game, 'Hungry Maw', enemy);
@@ -601,12 +782,13 @@ function cleanup(game) {
   game.enemies = game.enemies.filter(e => !dead.includes(e));
   if (game.enemies.some(e => e.hp <= 0)) { cleanup(game); return; }
   for (const a of game.allies.filter(a => a.hp <= 0)) {
-    if (a.lives > 0) { a.lives--; a.hp = a.maxHp; continue; }
     onUnitDeath(game, a, true);
-    equipmentAction(game, 'allyDeath', { victim: a });
+    if (a.lives > 0) { a.lives--; a.hp = a.maxHp; a.statuses = {}; delete a.killedBy; continue; }
+    equipmentAction(game, 'allyDeath', { victim: a, cause: a.killedBy || null });
     if (a.deathSummons) for (let i = 0; i < a.deathSummons[1]; i++) summonCreature(game, a.deathSummons[0], a);
   }
   game.allies = game.allies.filter(a => a.hp > 0);
+  if (game.enemies.some(e => e.hp <= 0) || game.allies.some(a => a.hp <= 0)) { cleanup(game); return; }
   if (dead.length && !game.enemies.length) {
     finishRealm(game);
   }
@@ -620,23 +802,7 @@ function equipmentAction(game, event, extra = {}) {
   const seq = (game.equipmentEventCount || 0) + 1;
   game.equipmentEventCount = seq;
   const rng = random(game.seed + game.turn * 313 + game.progress.spellsCast + game.realm + seq * 19);
-  const enemies = game.enemies.filter(e => e.hp > 0);
   const spells = () => availableSpells(game);
-  const context = {
-    ...extra, enemies, visible: enemies.filter(e => hasSight(game, game.player, e)), rng, roll: a => pick(a, rng),
-    spells, mastery: tag => spells().filter(s => s.tags.includes(tag)).reduce((n, s) => n + s.level, 0),
-    dist: distance, see: (a, b) => hasSight(game, a, b), act: a => allyTurn(game, a), cast: (n, p) => freeCast(game, n, p),
-    summon: (n, p, spec) => summonCreature(game, n, p, Object.fromEntries(Object.entries(spec).filter(([, v]) => v != null))),
-    hurt: (e, n, t) => damageEnemy(game, e, n, t), heal: n => { game.player.hp = Math.min(maxHealth(game), game.player.hp + n); },
-    pickupEligible: n => componentByName.get(n)?.on_pickup, pickup: n => applyComponentPickupEffects(game, n),
-    afflict: (e, st, n) => { e.statuses[st] = Math.max(e.statuses[st] || 0, n); },
-    weather: type => addCloud(game, 1 + Math.floor(rng() * (SIZE - 2)), 1 + Math.floor(rng() * (SIZE - 2)), type, 5),
-    giveUpgrade: s => {
-      if (!s) return;
-      const u = pick(s.upgrades.filter(u => !s.learnedUpgrades.includes(u.sp_id)), rng);
-      if (u) (game.rw3Upgrades[s.rw3Id] ??= []).push(u.sp_id);
-    },
-  };
   const active = activeItemEvents.get(game) || new Set();
   activeItemEvents.set(game, active);
   for (const [slot, copy] of copies) {
@@ -645,6 +811,29 @@ function equipmentAction(game, event, extra = {}) {
     const key = slot + '/' + event;
     if (active.has(key)) continue;
     active.add(key);
+    const enemies = game.enemies.filter(e => e.hp > 0);
+    const eqAction = {
+      caster: game.player, sourceKind: 'equipment', sourceName: item.name,
+      sourceTags: item.tags || [], sourceEquipment: item.name, manual: false,
+    };
+    const context = {
+      ...extra, turnId: currentTurnId(game), enemies, visible: enemies.filter(e => hasSight(game, game.player, e)), rng, roll: a => pick(a, rng),
+      spells, mastery: tag => tagMastery(game, tag),
+      spellInfo: name => effectiveRw3Spell(game, spellByName.get(name)?.id),
+      dist: distance, see: (a, b) => hasSight(game, a, b), act: a => allyTurn(game, a),
+      cast: (n, p, opts = {}) => freeCast(game, n, p, { sourceEquipment: item.name, ...opts }),
+      summon: (n, p, spec) => summonCreature(game, n, p, Object.fromEntries(Object.entries(spec).filter(([, v]) => v != null))),
+      hurt: (e, n, t) => withActionContext(game, eqAction, () => damageEnemy(game, e, n, t)),
+      heal: n => { game.player.hp = Math.min(maxHealth(game), game.player.hp + n); },
+      pickupEligible: n => componentByName.get(n)?.on_pickup, pickup: n => applyComponentPickupEffects(game, n),
+      afflict: (e, st, n) => applyStatus(game, e, st, n),
+      weather: type => addCloud(game, 1 + Math.floor(rng() * (SIZE - 2)), 1 + Math.floor(rng() * (SIZE - 2)), type, 5),
+      giveUpgrade: s => {
+        if (!s) return;
+        const u = pick(s.upgrades.filter(u => !s.learnedUpgrades.includes(u.sp_id)), rng);
+        if (u) (game.rw3Upgrades[s.rw3Id] ??= []).push(u.sp_id);
+      },
+    };
     try { equipmentEvent(event, game, item, copy, context); }
     finally { active.delete(key); }
   }
@@ -654,9 +843,10 @@ function equipped(game, name) {
   return Object.values(game.equipment).some(item => item.name === name);
 }
 
-function freeCast(game, name, target) {
+function freeCast(game, name, target, options = {}) {
   const spell = effectiveRw3Spell(game, spellByName.get(name)?.id);
-  if (spell) resolveRw3Cast(game, spell, { x: target.x, y: target.y }, false);
+  if (!spell || !target) return 0;
+  return resolveRw3Cast(game, spell, { x: target.x, y: target.y }, false, options);
 }
 
 function canStand(game, unit, pos) {
@@ -669,9 +859,13 @@ function canStand(game, unit, pos) {
 
 function enemyMoved(game, enemy) {
   if (distance(game.player, enemy) === 1 && equipped(game, "Masseter's Mace")) {
-    damageEnemy(game, enemy, 16, 'Arcane');
-    damageEnemy(game, enemy, 16, 'Physical');
-    if (enemy.hp <= 0) freeCast(game, 'Hungry Maw', enemy);
+    const mace = equipmentByName.get("Masseter's Mace");
+    const ctx = { caster: game.player, sourceKind: 'equipment', sourceName: mace.name, sourceTags: mace.tags, sourceEquipment: mace.name, manual: false };
+    withActionContext(game, ctx, () => {
+      damageEnemy(game, enemy, 16, 'Arcane');
+      damageEnemy(game, enemy, 16, 'Physical');
+    });
+    if (enemy.hp <= 0) freeCast(game, 'Hungry Maw', enemy, { sourceEquipment: mace.name });
   }
   for (const orb of game.allies.filter(a => a.hp > 0 && a.upgrades?.includes('Motion Sensors'))) {
     if ((orb.x === enemy.x || orb.y === enemy.y) && hasSight(game, orb, enemy)) fireOrbBeams(game, orb);
@@ -687,9 +881,12 @@ function summonCreature(game, name, target, spec = {}) {
 }
 
 function orbDamage(game, orb, enemy, amount, type) {
-  const dealt = damageEnemy(game, enemy, amount, type);
-  if (dealt && !enemy.hp && orb.upgrades.includes('Cursed Reflection')) for (const e of game.enemies.filter(e => e.name === enemy.name && e.hp > 0)) e.statuses.sharedPain = 3;
-  if (dealt && equipped(game, 'Empyrean Astrolabe')) damageEnemy(game, enemy, Math.floor(dealt / 2), 'Holy');
+  const dealt = withActionContext(game, { caster: orb, sourceKind: 'unit', sourceName: orb.orb || orb.name, sourceTags: orb.tags || [], manual: false }, () => damageEnemy(game, enemy, amount, type));
+  if (dealt && !enemy.hp && orb.upgrades.includes('Cursed Reflection')) for (const e of game.enemies.filter(e => e.name === enemy.name && e.hp > 0)) applyStatus(game, e, 'sharedPain', 3);
+  if (dealt && equipped(game, 'Empyrean Astrolabe')) {
+    const astro = equipmentByName.get('Empyrean Astrolabe');
+    withActionContext(game, { caster: game.player, sourceKind: 'equipment', sourceName: astro.name, sourceTags: astro.tags, sourceEquipment: astro.name, manual: false }, () => damageEnemy(game, enemy, Math.floor(dealt / 2), 'Holy'));
+  }
   return dealt;
 }
 

@@ -11,7 +11,8 @@ function connected(origin, units, distance) {
 export function resolveSpellEffect(game, spell, target, api) {
   const { name, damage, damageTypes, duration, radius, stats, upgradeNames } = spell;
   const { hurt, hurtAlly, summon, cast, see, dist, heal, roll, act, openNear, cells, floor, moveUnit } = api;
-  const visible = game.enemies.filter(e => e.hp > 0 && see(game.player, e));
+  const caster = api.caster || game.player;
+  const visible = game.enemies.filter(e => e.hp > 0 && see(caster, e));
   const living = game.enemies.filter(e => e.hp > 0);
   const inBurst = living.filter(e => dist(e, target) <= radius);
   const victim = api.enemy, ally = api.ally;
@@ -20,10 +21,34 @@ export function resolveSpellEffect(game, spell, target, api) {
     game.buffs = game.buffs.filter(b => !(b.name === name && b.type === type && b.stat === details.stat && b.damageType === details.damageType));
     game.buffs.push({ name, type, duration: duration || -1, ...details });
   };
-  const ailment = (e, status, turns = duration) => { e.statuses[status] = Math.max(turns, e.statuses[status] || 0); };
+  const ailment = (e, status, turns = duration) => {
+    if (api.afflict) api.afflict(e, status, turns);
+    else e.statuses[status] = Math.max(turns, e.statuses[status] || 0);
+  };
   const bonus = (stat, amount, extra = {}) => buff('bonus', { stat, amount, ...extra });
   const resist = (damageType, amount) => buff('resist', { damageType, amount });
   switch (name) {
+    case 'Dragon Claw': {
+      const maxRange = Math.max(1, Math.floor(spell.range));
+      const dx = target.x - caster.x, dy = target.y - caster.y, len = Math.hypot(dx, dy);
+      const arcMatches = u => {
+        if (u === caster || u.hp <= 0 || dist(caster, u) > maxRange) return false;
+        if (u === victim || (u.x === target.x && u.y === target.y)) return true;
+        if (len === 0) return dist(caster, u) <= 1;
+        const ux = u.x - caster.x, uy = u.y - caster.y, ulen = Math.hypot(ux, uy);
+        return ulen > 0 && (ux * dx + uy * dy) / (len * ulen) >= 0.5;
+      };
+      const targets = living.filter(arcMatches);
+      if (ally && ally !== caster && dist(caster, ally) <= maxRange && (ally.x === target.x && ally.y === target.y)) targets.push(ally);
+      const swipes = Math.max(1, stats.num_targets || 1);
+      for (const u of targets) {
+        for (let i = 0; i < swipes && u.hp > 0; i++) {
+          for (const t of damageTypes) (game.allies.includes(u) ? hurtAlly : hurt)(u, damage, t);
+        }
+        if (has('Serrated Steel Claws') && u.hp > 0) ailment(u, 'bleed', duration || 6);
+      }
+      return targets.length;
+    }
     case 'Freeze': {
       const group = has('Mass Freeze') ? connected(victim, living, dist) : victim ? [victim] : [];
       for (const e of group) {
@@ -44,8 +69,8 @@ export function resolveSpellEffect(game, spell, target, api) {
       const targets = new Set(victim ? [victim] : []);
       if (has('Stinger Barrage')) for (const e of inBurst.filter(e => e.statuses.poison)) targets.add(e);
       if (has('Silk Shot')) {
-        for (const p of cells(game.player, spell.range).filter(p => api.onSegment(game.player, target, p))) api.cloud(p, 'web', 3);
-        for (const e of living.filter(e => api.onSegment(game.player, target, e))) ailment(e, 'immobilized', 3);
+        for (const p of cells(caster, spell.range).filter(p => api.onSegment(caster, target, p))) api.cloud(p, 'web', 3);
+        for (const e of living.filter(e => api.onSegment(caster, target, e))) ailment(e, 'immobilized', 3);
       }
       for (const e of targets) {
         hurt(e, damage, 'Physical'); ailment(e, 'poison');
@@ -54,7 +79,7 @@ export function resolveSpellEffect(game, spell, target, api) {
       return targets.size;
     }
     case 'Blood Bullet': {
-      const path = [...living, ...game.allies].filter(e => api.onSegment(game.player, target, e)).sort((a,b) => dist(game.player,a) - dist(game.player,b));
+      const path = [...living, ...game.allies].filter(e => e !== caster && api.onSegment(caster, target, e)).sort((a,b) => dist(caster,a) - dist(caster,b));
       let hits = 0;
       for (let i = 0; i < Math.max(1, stats.num_targets); i++) for (const e of path.filter(e => e.hp > 0)) {
         for (const type of damageTypes) (game.allies.includes(e) ? hurtAlly : hurt)(e, damage, type);
@@ -64,25 +89,25 @@ export function resolveSpellEffect(game, spell, target, api) {
       return hits;
     }
     case 'Dread Lash': {
-      const targets = has('Web of Fear') && !dist(game.player,target) ? living.filter(e => e.statuses.fear) : victim ? [victim] : [];
+      const targets = has('Web of Fear') && !dist(caster,target) ? living.filter(e => e.statuses.fear) : victim ? [victim] : [];
       for (const e of targets) {
         for (const t of damageTypes) hurt(e, damage, t);
         ailment(e, 'fear');
         if (has('Razor Lash')) ailment(e, 'bleed');
-        for (let i = 0; i < spell.range && dist(game.player,e) > 1; i++) {
-          const p = { x: e.x + Math.sign(game.player.x - e.x), y: e.y + Math.sign(game.player.y - e.y) };
+        for (let i = 0; i < spell.range && dist(caster,e) > 1; i++) {
+          const p = { x: e.x + Math.sign(caster.x - e.x), y: e.y + Math.sign(caster.y - e.y) };
           if (!api.free(p)) break;
           moveUnit(e,p);
         }
-        if (has('Dreadful Secret') && dist(e,game.player) === 1) cast('Seal Fate',e);
+        if (has('Dreadful Secret') && dist(e,caster) === 1) cast('Seal Fate',e);
       }
       return targets.length;
     }
     case 'Cantrip Cascade': {
-      const dx = target.x - game.player.x, dy = target.y - game.player.y;
+      const dx = target.x - caster.x, dy = target.y - caster.y;
       const targets = has('Cantrip Burst') ? inBurst : visible.filter(e => {
-        const ex = e.x - game.player.x, ey = e.y - game.player.y;
-        return dist(game.player,e) <= spell.range && ex * dx + ey * dy >= .7 * Math.hypot(dx,dy) * Math.hypot(ex,ey);
+        const ex = e.x - caster.x, ey = e.y - caster.y;
+        return dist(caster,e) <= spell.range && ex * dx + ey * dy >= .7 * Math.hypot(dx,dy) * Math.hypot(ex,ey);
       });
       const sorceries = api.spells().filter(s => s.tags.includes('Sorcery') && s.range > 0 && s.id !== spell.id);
       const cantrips = sorceries.filter(s => s.level === 1), triple = has('Triple Tap') && roll(cantrips);
@@ -152,7 +177,7 @@ export function resolveSpellEffect(game, spell, target, api) {
     }
     case 'Wheel of Death': if (living.length) hurt(roll(living), damage, 'Dark'); return Math.min(living.length, 1);
     case 'Blazerip': case 'Chill Wind': case 'Soul Wind': case 'Wall of Flame': {
-      const horizontal = Math.abs(target.y - game.player.y) >= Math.abs(target.x - game.player.x);
+      const horizontal = Math.abs(target.y - caster.y) >= Math.abs(target.x - caster.x);
       const width = name === 'Chill Wind' || name === 'Soul Wind' ? 1 : 0;
       const r = name === 'Wall of Flame' || name === 'Blazerip' ? radius : 30;
       const affected = p => Math.abs(horizontal ? p.y - target.y : p.x - target.x) <= width && Math.abs(horizontal ? p.x - target.x : p.y - target.y) <= r;
@@ -183,7 +208,7 @@ export function resolveSpellEffect(game, spell, target, api) {
     }
     case 'Chain Lightning': case 'Bouncing Slimeball': {
       const visited = new Set();
-      let prev = game.player, e = victim;
+      let prev = caster, e = victim;
       const chain = name === 'Chain Lightning', limit = chain ? living.length : stats.num_targets;
       while (e && visited.size < limit) {
         if (chain) for (const other of living.filter(other => api.onSegment(prev, e, other))) hurt(other, damage, 'Lightning');
@@ -195,9 +220,9 @@ export function resolveSpellEffect(game, spell, target, api) {
       return visited.size;
     }
     case 'Moon Glaive': {
-      for (const e of living.filter(e => api.onSegment(game.player, target, e))) for (const t of damageTypes) hurt(e, damage, t);
-      game.buffs.push({ name, type: 'returnBeam', from: target, to: { x: game.player.x, y: game.player.y }, damage, types: damageTypes, duration: 2 });
-      return living.filter(e => api.onSegment(game.player, target, e)).length;
+      for (const e of living.filter(e => api.onSegment(caster, target, e))) for (const t of damageTypes) hurt(e, damage, t);
+      game.buffs.push({ name, type: 'returnBeam', from: target, to: { x: caster.x, y: caster.y }, damage, types: damageTypes, duration: 2 });
+      return living.filter(e => api.onSegment(caster, target, e)).length;
     }
     case 'Ion Tentacles': buff('tentacles', { base: stats.num_targets, total: duration, damage }); return 0;
     case 'Faehaunt Garden': buff('garden', { stored: 0, threshold: stats.minion_health, minionDuration: stats.minion_duration }); return 0;
@@ -207,7 +232,7 @@ export function resolveSpellEffect(game, spell, target, api) {
     case 'Litany of Curses': {
       const sequence = ['poison', 'bleed', 'necrosis', 'berserk', 'bleed', 'silence'];
       const step = game.channel?.spellId === spell.id ? game.channel.totalTurns - game.channel.turnsLeft : 0;
-      for (const e of living) for (const st of sequence.slice(0, step + 1)) e.statuses[st] = (e.statuses[st] || 0) + duration;
+      for (const e of living) for (const st of sequence.slice(0, step + 1)) ailment(e, st, (e.statuses[st] || 0) + duration);
       return living.length;
     }
     case 'Ritual of the Opening Eye':
@@ -359,7 +384,7 @@ export function resolveSpellEffect(game, spell, target, api) {
       if (!victim.hp) summon('Rotting Zombie', victim, { damage: stats.minion_damage });
       return 1;
     case 'Heavenly Blast': {
-      const affected = e => dist(target, e) <= radius || api.onSegment(game.player, target, e);
+      const affected = e => dist(target, e) <= radius || api.onSegment(caster, target, e);
       for (const e of living.filter(affected)) hurt(e, damage * (has('Judgement') && e.hp === e.maxHp ? 3 : 1), 'Holy');
       for (const a of game.allies.filter(affected)) { a.hp = Math.min(a.maxHp, a.hp + damage); if (has('Shield')) a.shields += 3; }
       if (victim && has('Immolating Blast')) cast('Immolate', victim);
